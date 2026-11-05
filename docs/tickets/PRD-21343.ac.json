@@ -1,0 +1,138 @@
+[
+  {
+    "id": "TC1",
+    "ac": "AC1",
+    "text": "Given the connector is running, When a client sends tools/list with a valid credential header, Then the response includes exactly the 4 digitalocean_inference_* tools named in the tech design's Data & API contract table, each with a first-line description <= 100 chars and full description <= 500 chars",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_tools_list_has_all_inference_tools_with_valid_descriptions"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_tools_list_has_all_inference_tools_with_valid_descriptions PASSED (full suite: 16 passed in 0.10s, see Self-test section for the complete run). Asserts the exact 4-name set and <=100/<=500 char description bounds."
+  },
+  {
+    "id": "TC2",
+    "ac": "AC2",
+    "text": "Given a tools/call request with no X-DigitalOcean-Api-Token header, When any Inference tool is invoked, Then the response is HTTP 401 listing the required header, and the upstream inference.do-ai.run client is never called",
+    "type": "auto",
+    "tests": [
+      "tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call PASSED. Also reproduced against the real ASGI app in scratch/PRD-21343/smoke.py: POST /mcp with no header -> 401 {\"error\":{\"code\":\"not_configured\",\"message\":\"Missing required header: X-DigitalOcean-Api-Token\",...}}."
+  },
+  {
+    "id": "TC3",
+    "ac": "AC3",
+    "text": "Given a valid token and a mocked GET /v1/models response with 3 models, When digitalocean_inference_list_models is called, Then it returns the 3 models with id/created/owned_by fields and the tool is annotated readOnlyHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_list_models_returns_catalog"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_list_models_returns_catalog PASSED; tests/inference/test_tools.py::test_tools_list_hints_match_design PASSED confirms readOnlyHint=True on digitalocean_inference_list_models."
+  },
+  {
+    "id": "TC4",
+    "ac": "AC4",
+    "text": "Given a valid token, a catalog model id, and a mocked POST /v1/chat/completions response, When digitalocean_inference_create_chat_completion is called, Then it returns the assistant message content, finish_reason, and usage",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_create_chat_completion_happy_path"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_create_chat_completion_happy_path PASSED."
+  },
+  {
+    "id": "TC5",
+    "ac": "AC4",
+    "text": "Given a mocked upstream 400/404 response for an unknown model id, When digitalocean_inference_create_chat_completion is called, Then it returns a structured error carrying DigitalOcean's own message, not a generic failure or an HTTP 500",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_create_chat_completion_unknown_model_returns_structured_error"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_create_chat_completion_unknown_model_returns_structured_error PASSED. Mocked 404 {\"id\":\"not_found\",\"message\":\"model 'does-not-exist' was not found\"} maps to {\"error\":{\"code\":\"not_found\",\"message\":\"model 'does-not-exist' was not found\",\"retryable\":false}}."
+  },
+  {
+    "id": "TC6",
+    "ac": "AC5",
+    "text": "Given a valid token and a mocked POST /v1/embeddings response for a 2-item input array, When digitalocean_inference_create_embedding is called, Then it returns 2 embedding vectors, one per input, plus token usage",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_create_embedding_multi_input"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_create_embedding_multi_input PASSED."
+  },
+  {
+    "id": "TC7",
+    "ac": "AC6",
+    "text": "Given a valid token and a mocked POST /v1/images/generations response, When digitalocean_inference_generate_image is called, Then it returns the generated image data and revised_prompt when present, and the tool's description states it is not read-only",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_generate_image_happy_path"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_generate_image_happy_path PASSED; test_tools_list_has_all_inference_tools_with_valid_descriptions additionally asserts the string 'not read-only' appears in the tool's description."
+  },
+  {
+    "id": "TC8",
+    "ac": "AC7",
+    "text": "Given a mocked upstream 429 response with a Retry-After header, When any Inference tool is called, Then the client retries with backoff honoring Retry-After within the bounded retry budget; if still 429 after retries, Then the agent sees a structured rate_limited error, not a bare timeout",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_client.py::test_429_retries_with_backoff_then_rate_limited"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_client.py::test_429_retries_with_backoff_then_rate_limited PASSED: asserts attempts == max_retries+1 (4) and sleeps == [2.0, 2.0, 2.0] (Retry-After honored, capped by max_retry_wait_seconds), final result is ToolError(code='rate_limited', retryable=True). A companion test (test_5xx_retries_then_succeeds_within_budget, not an AC but same mechanism) confirms a transient 503 that clears within budget succeeds without raising."
+  },
+  {
+    "id": "TC9",
+    "ac": "AC8",
+    "text": "Given a mocked upstream 401 response (valid MSPbots header, invalid DigitalOcean token), When any Inference tool is called, Then the agent sees a structured unauthorized error distinct from TC2's not_configured (missing MSPbots header)",
+    "type": "auto",
+    "tests": [
+      "tests/inference/test_tools.py::test_upstream_401_returns_unauthorized_not_not_configured"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/inference/test_tools.py::test_upstream_401_returns_unauthorized_not_not_configured PASSED. Also reproduced live in scratch/PRD-21343/smoke.py: a real call to https://inference.do-ai.run/v1/models with a syntactically-fake token returned a real upstream HTTP 401, mapped by the connector to {\"error\":{\"code\":\"unauthorized\",...}} -- confirms the Header -> Authorization wiring reaches DigitalOcean's real API end to end (SOP A5)."
+  },
+  {
+    "id": "TC10",
+    "ac": "AC9",
+    "text": "Given two concurrent tools/call requests carrying two different tenants' X-DigitalOcean-Api-Token values (A and B), When both complete, Then neither response contains data retrieved using the other request's token -- verified by asserting no shared mutable state keyed only by in-process globals",
+    "type": "auto",
+    "tests": [
+      "tests/test_middleware.py::test_concurrent_requests_do_not_leak_credentials_across_tenants"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> tests/test_middleware.py::test_concurrent_requests_do_not_leak_credentials_across_tenants PASSED: two interleaved (asyncio.sleep-forced) requests with token-A/token-B each see only their own token in the outbound Authorization header."
+  },
+  {
+    "id": "TC11",
+    "ac": "AC10",
+    "text": "Given the repository's README.md, Then it documents the X-DigitalOcean-Api-Token header (purpose, how to obtain either a Personal Access Token or a Model Access Key), lists all 4 Inference tools in its tool table, and its MSPbots Connector section is byte-for-byte identical to the skill's reference/readme-connector-section.md",
+    "type": "auto",
+    "tests": [
+      "tests/test_readme.py::test_readme_documents_inference_header_and_tools",
+      "tests/test_readme.py::test_readme_connector_section_matches_reference_byte_for_byte"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v -> both tests PASSED. Independently confirmed with `diff` between README.md's extracted connector section and tests/fixtures/mspbots_connector_section.md (itself diffed byte-identical against ~/.claude/skills/vendor-mcp-development/reference/readme-connector-section.md) -> IDENTICAL."
+  },
+  {
+    "id": "TC12",
+    "ac": "AC4",
+    "text": "Given a real DigitalOcean account token and an unknown/invalid model id, When digitalocean_inference_create_chat_completion is called against the live API, Then the real error shape (status code, id/message fields) confirms or corrects the assumed 400/404 -> invalid_argument/not_found mapping in the tech design's Data & API contract section",
+    "type": "manual",
+    "steps": [
+      "Obtain a real DigitalOcean Personal Access Token or Model Access Key",
+      "Start the connector locally with the real token in X-DigitalOcean-Api-Token",
+      "Call tools/call digitalocean_inference_create_chat_completion with a model id that does not exist on the account, e.g. \"does-not-exist-123\""
+    ],
+    "expect": "The real HTTP status and error body match (or are used to correct) the tech design's assumed mapping; the connector surfaces it as a structured invalid_argument or not_found error, not a 500",
+    "result": "untested",
+    "notes": "needs a real vendor account; not blocking per mcp-track.md section 3 (\"no test account is not a blocker\"). Partially de-risked: scratch/PRD-21343/smoke.py did reach the real inference.do-ai.run endpoint with a fake token and got a real 401 mapped to unauthorized (see TC9 evidence), confirming the live wiring and the 401 branch of the error-mapping table; only the 400/404 \"unknown model\" branch remains unverified against a real account."
+  }
+]
