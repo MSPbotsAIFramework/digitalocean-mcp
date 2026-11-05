@@ -27,3 +27,36 @@ Everything else reviewed clean: credential handling only from `X-DigitalOcean-Ap
    - Container run: `GET /health` → `200 {"status":"ok"}`; `POST /mcp tools/list` with no header → `401 not_configured`, and the container's own stdout shows the new `{"event":"missing_credential_header",...}` JSON line; `POST /mcp tools/list` with a placeholder token → `200`, all 18 tools; `POST /mcp tools/call digitalocean_apps_list_apps` with a placeholder token → real call to `https://api.digitalocean.com/v2/apps` (expected `401 unauthorized` from DigitalOcean, since the token is a placeholder, not a real account) — and the container's stdout shows one `digitalocean_api_call` line and one `tool_call` line sharing the same `request_id`, with the placeholder token absent from both; `docker exec whoami` → `app` (non-root); `docker inspect .State.Health` → `"Status":"healthy"`.
    - Test cases: this fix is a non-functional/SOP requirement (Observability), not any of the 20 numbered ACs/TCs in `PRD-21338.ac.json` — none needed to change; all 17 automated ones still pass (now 23 → 35 with the new logging tests added), the 3 needing a real DigitalOcean account are unaffected and still pending per `mcp-track.md` §3.
 
+## Round 2 · 2026-11-05 · reviewed dev/PRD-21338 @ 072c536 (base main @ 34681e7)
+
+Verdict: approved
+Status: frozen @ 072c536
+
+### Round 1 Fixes verified
+
+Round 1's single must-fix (structured, request-correlated logging, SOP §6) is resolved:
+
+- `src/digitalocean_mcp/telemetry.py` (new) provides `log_event`/`set_request_id`/`get_request_id`/`reset_request_id`/`elapsed_ms`; one JSON line per event via stdlib `logging`, request-id carried in a `ContextVar` reset in `finally` (same discipline as the existing credential `ContextVar`) — verified in `telemetry.py:14-52` and `middleware.py:68-86`.
+- `middleware.py` binds a fresh `uuid4().hex` request-id around every `/mcp` request (both the 401 path and the authenticated path), and logs `missing_credential_header` (path only) on the 401 path — verified in `middleware.py:68-86` and `tests/test_middleware.py::test_missing_credential_header_logs_a_warning_with_no_token_value`.
+- `client.py`'s `DigitalOceanClient._log_call` logs one `digitalocean_api_call` event per outbound attempt (method, path, `status_code` or `error_code` for timeouts/network errors, `attempt`, `retrying`, `latency_ms`) — never the `Authorization` header or the response body (`client.py:83-139`).
+- `tools/_shared.py`'s `tool_guard` logs one `tool_call` event per invocation with `_redact_args`: short scalars pass through (capped at 200 chars), anything else (dict/list — e.g. an app `spec`, which can carry a `SECRET`-type env var) collapses to its type name only (`_shared.py:117-172`). Confirmed no argument-smuggling path: `tool_guard` only receives keyword arguments (FastMCP calls tools by name), so positional args are not a gap.
+- `__main__.py` wires `logging.basicConfig(level=INFO, format="%(message)s")` so the JSON lines actually reach stdout at runtime.
+
+### Independent re-verification (not just re-reading the Fixes section)
+
+1. `uv sync && uv run pytest -q` on `072c536` (fresh `uv` install, synced with `main`@`34681e7`, unchanged since round 1): **35 passed**, 0 failed — matches the Self-test claim.
+2. `grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .`: one hit, confirmed to be only this review file's own Round 1 finding text quoting the SOP's Chinese section titles as evidence — not `src/`, not `README.md`, not any connector-facing content. Matches the Fixes section's explanation; the gate's intent (no Chinese in the connector itself) is not violated.
+3. README's MSPbots Connector section (`README.md:11-81`, between the `BEGIN`/`END MSPBOTS CONNECTOR SECTION` markers) diffed byte-for-byte against `vendor-mcp-development/reference/readme-connector-section.md`: **identical**.
+4. `sudo docker build --platform linux/amd64 -t digitalocean-mcp:review-r2 .`: **OK**. Ran the container (`docker run -d -p 18089:8080`):
+   - `GET /health` → `200`.
+   - `POST /mcp tools/list` with no `X-DigitalOcean-Api-Token` header → `401 not_configured`; container stdout shows `{"event":"missing_credential_header","request_id":"<uuid>","path":"/mcp"}` — no credential value anywhere in the line.
+   - `POST /mcp tools/list` with a placeholder token → `200`, full tool list returned.
+   - `POST /mcp tools/call digitalocean_apps_list_apps` with a placeholder token containing a planted marker (`do_fake_placeholder_SECRETMARK`) → real call to `https://api.digitalocean.com/v2/apps`, DigitalOcean returns `401 unauthorized` (expected, placeholder credential); stdout shows one `digitalocean_api_call` line (`status_code":401`) and one `tool_call` line (`outcome":"error","error_code":"unauthorized"`) sharing the same `request_id`; `grep -c SECRETMARK` over the full container log output: **0** — the planted token never reaches the logs.
+   - `docker run --rm ... whoami` → `app` (non-root), matching the Self-test's claim.
+5. `gitleaks` still not installed in this environment; same manual-grep fallback as the Self-test re-run, no findings beyond parameter/variable names and known placeholders.
+
+No new must-fix. No new diff beyond the logging fix itself (`git diff 993e4ef 072c536 --stat`: `telemetry.py`, `client.py`, `middleware.py`, `tools/_shared.py`, `__main__.py`, three test files, and this review file's own Fixes section — nothing touching scope outside the must-fix).
+
+### Findings
+
+None.
