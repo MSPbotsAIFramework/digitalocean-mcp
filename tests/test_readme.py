@@ -1,5 +1,7 @@
-"""AC10: README documents the credential header and carries the MSPbots
-Connector section verbatim (TC11).
+"""AC10/TC11 (Inference) and AC15/TC19-TC20 (Apps): README documents the
+shared credential header (both resource groups reuse the same
+`X-DigitalOcean-Api-Token` header, see docs/tickets/PRD-21343.md "Decisions
+made by DEV01") and carries the MSPbots Connector section verbatim.
 """
 
 from __future__ import annotations
@@ -20,12 +22,13 @@ def _extract_connector_section(readme_text: str) -> str:
 
 
 def test_readme_connector_section_matches_reference_byte_for_byte():
-    """TC11 (AC10).
+    """TC11 (AC10) / TC19 (AC15).
 
     The fixture is a checked-in copy of vendor-mcp-development's
     reference/readme-connector-section.md. If that template is ever updated,
-    this fixture must be refreshed to match -- this test only guards against
-    README drifting away from whatever the fixture currently says.
+    this fixture must be refreshed to match (see the SOP's "all repos use
+    the same text" rule) — this test only guards against README drifting
+    away from whatever the fixture currently says.
     """
     fixture_text = (REPO_ROOT / "tests" / "fixtures" / "mspbots_connector_section.md").read_text()
     readme_text = README.read_text()
@@ -48,3 +51,11 @@ def test_readme_documents_inference_header_and_tools():
         "digitalocean_inference_generate_image",
     ):
         assert tool in text, f"README tool table missing {tool}"
+
+
+def test_readme_documents_credential_header_and_creation_path():
+    """TC20 (AC15)."""
+    text = README.read_text()
+    assert "## Authentication headers" in text
+    assert "X-DigitalOcean-Api-Token" in text
+    assert "Control Panel" in text and "Tokens" in text, "must document where to create the token"

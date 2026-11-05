@@ -39,10 +39,17 @@ EXPECTED_TOOLS = {
 
 @pytest.mark.asyncio
 async def test_tools_list_has_all_inference_tools_with_valid_descriptions(mcp):
-    """TC1 (AC1)."""
+    """TC1 (AC1).
+
+    Subset check, not exact-set: `mcp` is the shared service's full
+    `tools/list` (PRD-21338's Apps tools are registered alongside Inference's
+    in `server.py`), so this only asserts every Inference tool is present
+    and well-formed -- it does not assert Inference is the only resource
+    group.
+    """
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
-    assert names == set(EXPECTED_TOOLS), names
+    assert set(EXPECTED_TOOLS) <= names, names
 
     for tool in tools:
         description = tool.description or ""

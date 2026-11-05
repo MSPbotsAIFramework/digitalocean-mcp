@@ -1,0 +1,163 @@
+[
+  {
+    "id": "TC1",
+    "ac": "AC1",
+    "text": "Given the connector is running, When a client sends tools/list, Then the response includes exactly the 18 digitalocean_apps_* tools named in the tech design's Data & API contract table, each with a first-line description <= 100 chars and full description <= 500 chars",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_tools_list_has_all_apps_tools_with_valid_descriptions"]
+  },
+  {
+    "id": "TC2",
+    "ac": "AC1",
+    "text": "Given tools/list, Then every tool's readOnlyHint/destructiveHint/idempotentHint matches the tech design's tool table",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_tools_list_hints_match_design"]
+  },
+  {
+    "id": "TC3",
+    "ac": "AC2",
+    "text": "Given a tools/call request with no X-DigitalOcean-Api-Token header, When any tool is invoked, Then the response is HTTP 401 listing the required header, and the upstream DigitalOcean client is never called",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call"]
+  },
+  {
+    "id": "TC4",
+    "ac": "AC3",
+    "text": "Given a mocked upstream with more than 50 apps, When digitalocean_apps_list_apps is called with no arguments, Then it returns at most 50 apps and has_more is true",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_list_apps_default_limit_and_has_more"]
+  },
+  {
+    "id": "TC5",
+    "ac": "AC3",
+    "text": "Given a mocked upstream with more than 200 apps, When digitalocean_apps_list_apps is called with limit=500, Then it returns at most 200 apps (the hard cap), not 500",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_list_apps_hard_cap_at_200"]
+  },
+  {
+    "id": "TC6",
+    "ac": "AC4",
+    "text": "Given a valid token and a real existing app id, When digitalocean_apps_get_app is called, Then it returns that app's current spec and active deployment id",
+    "type": "manual",
+    "steps": [
+      "Obtain a real DigitalOcean API token with at least one existing app in the account",
+      "Start the connector locally with the real token in X-DigitalOcean-Api-Token",
+      "Call tools/call digitalocean_apps_get_app with that app's real id"
+    ],
+    "expect": "Response contains the app's spec and an active_deployment object with an id and phase field, matching what the DigitalOcean control panel shows for that app",
+    "result": "untested",
+    "notes": "needs a real vendor account; recorded as pending in the Self-test report, not blocking per mcp-track.md section 3"
+  },
+  {
+    "id": "TC7",
+    "ac": "AC4",
+    "text": "Given a mocked upstream 404 for an unknown app id, When digitalocean_apps_get_app is called, Then it returns a structured not_found error, not an HTTP 500",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_app_unknown_id_returns_not_found_error"]
+  },
+  {
+    "id": "TC8",
+    "ac": "AC5",
+    "text": "Given a real token and an app spec with an invalid region, When digitalocean_apps_create_app is called, Then DigitalOcean's own validation error is surfaced as invalid_argument with DigitalOcean's message",
+    "type": "manual",
+    "steps": [
+      "Start the connector locally with a real DigitalOcean API token",
+      "Call tools/call digitalocean_apps_create_app with a spec using a region slug that does not exist"
+    ],
+    "expect": "Response is {\"error\": {\"code\": \"invalid_argument\", ...}} and the message text matches DigitalOcean's own validation error, not a generic failure",
+    "result": "untested",
+    "notes": "needs a real vendor account; recorded as pending in the Self-test report, not blocking"
+  },
+  {
+    "id": "TC9",
+    "ac": "AC6",
+    "text": "Given the registered tool description for digitalocean_apps_update_app, Then it states PUT-replace semantics (unspecified fields are not partially merged)",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_update_app_description_documents_replace_semantics"]
+  },
+  {
+    "id": "TC10",
+    "ac": "AC7",
+    "text": "Given the digitalocean_apps_delete_app tool definition, Then its only required argument is a single app_id (no name or filter argument), destructiveHint is true, and its description contains the word irreversible",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_delete_app_requires_explicit_id_and_is_marked_destructive"]
+  },
+  {
+    "id": "TC11",
+    "ac": "AC8",
+    "text": "Given a mocked upstream, When digitalocean_apps_restart_app is called with no component_names, Then the restart request carries no component filter (restarts all); When called with component_names=[\"web\"], Then the request carries that filter",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_restart_app_default_restarts_all_components", "tests/test_tools.py::test_restart_app_with_component_filter"]
+  },
+  {
+    "id": "TC12",
+    "ac": "AC9",
+    "text": "Given a mocked upstream 409 conflict on create_deployment (deployment already in progress), When digitalocean_apps_create_deployment is called, Then the result is a structured upstream_error and the call is not retried as if transient",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_create_deployment_conflict_is_not_retried"]
+  },
+  {
+    "id": "TC13",
+    "ac": "AC10",
+    "text": "Given a mocked upstream, When digitalocean_apps_get_logs is called with app_id only, Then it calls the aggregate active-deployment logs endpoint; When called with both deployment_id and component_name, Then it calls the most specific per-component deployment logs endpoint",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_logs_defaults_to_active_deployment_aggregate", "tests/test_tools.py::test_get_logs_with_deployment_and_component_calls_specific_endpoint"]
+  },
+  {
+    "id": "TC14",
+    "ac": "AC10",
+    "text": "Given digitalocean_apps_get_logs is called with log_type=\"not-a-real-type\", Then it returns invalid_argument without calling the upstream API",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_logs_unsupported_log_type_is_invalid_argument"]
+  },
+  {
+    "id": "TC15",
+    "ac": "AC11",
+    "text": "Given a real app with at least two deployments, When digitalocean_apps_manage_rollback is called with action=start then action=commit using the deployment_id returned by start, Then the app rolls back to the earlier deployment; When action=commit is called without a prior start's deployment_id, Then it is rejected as invalid_argument",
+    "type": "manual",
+    "steps": [
+      "Start the connector locally with a real DigitalOcean API token against an app with 2+ deployments",
+      "Call digitalocean_apps_manage_rollback(action=\"start\", app_id=...) and capture the returned deployment_id",
+      "Call digitalocean_apps_manage_rollback(action=\"commit\", app_id=..., deployment_id=<captured>)",
+      "Separately, call digitalocean_apps_manage_rollback(action=\"commit\", app_id=..., deployment_id omitted or invalid)"
+    ],
+    "expect": "After commit, the app's active deployment is the earlier one; the commit-without-a-prior-start call returns {\"error\": {\"code\": \"invalid_argument\", ...}}",
+    "result": "untested",
+    "notes": "needs a real vendor account; recorded as pending in the Self-test report, not blocking"
+  },
+  {
+    "id": "TC16",
+    "ac": "AC12",
+    "text": "Given digitalocean_apps_get_deployment_options() and digitalocean_apps_validate_spec(spec=...), Then both succeed with no app_id argument supplied and both are readOnlyHint true",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_deployment_options_and_validate_spec_need_no_app_id"]
+  },
+  {
+    "id": "TC17",
+    "ac": "AC13",
+    "text": "Given two concurrent tools/call requests carrying different X-DigitalOcean-Api-Token values (token A and token B), When both complete, Then the outbound Authorization header captured for each matches only its own request's token, never the other's",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_concurrent_requests_do_not_cross_contaminate_credentials"]
+  },
+  {
+    "id": "TC18",
+    "ac": "AC14",
+    "text": "Given a mocked upstream that returns 429 with Retry-After once then 200, When a tool is called, Then it succeeds after one backoff delay; Given a mocked upstream that returns 429 for the whole retry budget, Then the tool returns a structured rate_limited error rather than hanging",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_single_429_then_success_retries_and_succeeds", "tests/test_tools.py::test_sustained_429_returns_rate_limited_not_a_hang"]
+  },
+  {
+    "id": "TC19",
+    "ac": "AC15",
+    "text": "Given README.md's MSPbots Connector section, Then it is byte-for-byte identical to reference/readme-connector-section.md from the vendor-mcp-development skill",
+    "type": "auto",
+    "tests": ["tests/test_readme.py::test_connector_section_matches_skill_template_verbatim"]
+  },
+  {
+    "id": "TC20",
+    "ac": "AC15",
+    "text": "Given README.md, Then it documents X-DigitalOcean-Api-Token in a header table including a token-creation path",
+    "type": "auto",
+    "tests": ["tests/test_readme.py::test_readme_documents_credential_header_and_creation_path"]
+  }
+]

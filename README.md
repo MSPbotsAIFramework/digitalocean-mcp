@@ -1,11 +1,11 @@
 # digitalocean-mcp
 
-MCP server exposing DigitalOcean's Serverless Inference model catalog to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers listing the account's available inference models and running chat completions, embeddings, and image generation against them.
+MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers two resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; and Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them.
 
 - **Transport**: MCP Streamable HTTP (`POST /mcp`) + `GET /health`.
 - **Tech stack**: Python 3.12, [FastMCP](https://github.com/modelcontextprotocol/python-sdk), `httpx`, `pydantic-settings`.
 - **License**: Apache-2.0 (see [LICENSE](LICENSE)). Copyright MSPbots.ai.
-- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog (this one), Kubernetes (DOKS), and Networking. Only the Inference tools are documented below.
+- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. Apps and Inference are documented below; Kubernetes and Networking land on their own tickets.
 
 <!-- BEGIN MSPBOTS CONNECTOR SECTION (verbatim copy of vendor-mcp-development's reference/readme-connector-section.md — do not edit by hand, see tests/test_readme.py) -->
 <div align="center">
@@ -85,13 +85,40 @@ Links: [connect.mspbots.ai](https://connect.mspbots.ai) · [mspbots.ai](https://
 
 | Header | Required | Type | Description |
 |---|---|---|---|
-| `X-DigitalOcean-Api-Token` | yes | password | DigitalOcean credential for Serverless Inference. Either a general Personal Access Token (Control Panel → **API** → **Tokens** → **Generate New Token**) or a narrower-scoped Model Access Key (Control Panel → **Inference** → **Model Access Keys**, see DigitalOcean's "Manage Model Access Keys" docs) — DigitalOcean accepts both for this API. |
+| `X-DigitalOcean-Api-Token` | yes | password | DigitalOcean credential, shared by every resource group in this connector. Either a general Personal Access Token (Control Panel → **API** → **Tokens** → **Generate New Token**; needs read/write scope for the write tools below, a read-only token still works for the read-only tools and gets DigitalOcean's own 403 on write attempts) or, for Inference specifically, a narrower-scoped Model Access Key (Control Panel → **Inference** → **Model Access Keys**, see DigitalOcean's "Manage Model Access Keys" docs) — DigitalOcean accepts both for the Inference API. |
 
 Missing this header returns HTTP 401 with the header name in the response body — no request ever reaches DigitalOcean's API without it.
 
-## Tools (4)
+## Tools (22)
 
-All tools are prefixed `digitalocean_inference_` (this repository's other DigitalOcean resource groups, delivered on separate tickets, use their own `digitalocean_<group>_` prefixes).
+Every tool is prefixed `digitalocean_<group>_` so tools from different resource groups never collide by name.
+
+### Apps (18)
+
+| Tool | Description |
+|---|---|
+| `digitalocean_apps_list_apps` | List DigitalOcean App Platform apps in the account. |
+| `digitalocean_apps_get_app` | Get one app's current spec and active deployment. |
+| `digitalocean_apps_create_app` | Create a new app from an app spec. |
+| `digitalocean_apps_update_app` | Replace an app's spec. Uses PUT-replace semantics, not a partial merge. |
+| `digitalocean_apps_delete_app` | Delete an app. This is irreversible and removes all its deployments. |
+| `digitalocean_apps_restart_app` | Restart an app's components, or the whole app if none are named. |
+| `digitalocean_apps_validate_spec` | Validate an app spec without creating or changing any app. |
+| `digitalocean_apps_list_deployments` | List an app's deployments, most recent first. |
+| `digitalocean_apps_get_deployment` | Get one deployment's phase, cause, and timestamps. |
+| `digitalocean_apps_create_deployment` | Trigger a new deployment of an app's current spec. |
+| `digitalocean_apps_cancel_deployment` | Cancel a deployment that is in progress. |
+| `digitalocean_apps_manage_rollback` | Start, validate, commit, or revert a rollback to a prior deployment. |
+| `digitalocean_apps_get_logs` | Get log access URLs for an app, a deployment, or one component. |
+| `digitalocean_apps_get_instances` | List the running instances backing an app's components. |
+| `digitalocean_apps_list_events` | List an app's build/deploy events, or get one event by id. |
+| `digitalocean_apps_list_alerts` | List the alert rules configured on an app. |
+| `digitalocean_apps_get_health` | Get an app's aggregate health across its components. |
+| `digitalocean_apps_get_deployment_options` | List valid regions and instance sizes for building an app spec. |
+
+Destructive tools (`delete_app`, `restart_app`, `cancel_deployment`, and `manage_rollback`'s `commit`/`revert` actions) always require an explicit resource id — there is no name-based lookup or bulk variant.
+
+### Inference (4)
 
 | Tool | Description |
 |---|---|

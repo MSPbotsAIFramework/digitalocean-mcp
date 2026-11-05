@@ -9,11 +9,10 @@ initialized" while `/health` keeps returning 200).
 
 This repository is shared across DigitalOcean resource-group tickets
 (PRD-21338 Apps, PRD-21343 Inference, PRD-21344 Kubernetes, PRD-21345
-Networking); this ticket (PRD-21343) only registers the Inference tools.
-Whichever sibling ticket's branch merges first/second needs to reconcile this
-file's imports and `register()` calls into one list covering every landed
-resource group -- see docs/tickets/PRD-21343.md section "Risks &
-dependencies".
+Networking). This module registers every resource group's tools that have
+landed on `main` so far; a new resource group adds its own `import` and
+`register()` call here plus a paragraph to `SERVICE_INSTRUCTIONS`, without
+touching the other groups' registrations.
 """
 
 from __future__ import annotations
@@ -30,17 +29,34 @@ from starlette.routing import Mount, Route
 
 from digitalocean_mcp.middleware import CredentialMiddleware
 from digitalocean_mcp.settings import Settings, get_settings
-from digitalocean_mcp.tools import inference
+from digitalocean_mcp.tools import apps, deployments, inference, observability, reference
 
 SERVICE_INSTRUCTIONS = (
-    "DigitalOcean Serverless Inference connector. Covers one DigitalOcean "
-    "resource group: Inference -- the model catalog and core generative "
+    "DigitalOcean connector. Covers two DigitalOcean resource groups so far:\n"
+    "\n"
+    "Apps (App Platform) — the PaaS that builds and runs apps from a Git repo "
+    "or container image. Core concepts: an app has a spec (services, static "
+    "sites, jobs) and a sequence of deployments; each deployment has a phase "
+    "and, once active, serves traffic at the app's ingress URL. Typical "
+    "flows: list/inspect apps -> get_app for one app's spec and active "
+    "deployment -> get_logs/get_instances/get_health to observe it -> "
+    "create_deployment to ship a new version, or manage_rollback to recover "
+    "a bad one. validate_spec and get_deployment_options are account-level "
+    "reference lookups that do not require an app id. All destructive "
+    "actions (delete_app, restart_app, cancel_deployment, rollback "
+    "commit/revert) require an explicit resource id — there is no "
+    "name-based or bulk variant.\n"
+    "\n"
+    "Inference — the Serverless Inference model catalog and core generative "
     "operations (chat completions, embeddings, image generation) served "
     "against your account's available models. Typical flow: "
     "list_models to see what is available on the account -> "
     "create_chat_completion / create_embedding / generate_image naming one "
     "of the catalog's model ids. list_models is read-only; the other three "
-    "tools create new content and consume the tenant's DigitalOcean quota."
+    "tools create new content and consume the tenant's DigitalOcean quota.\n"
+    "\n"
+    "Every tool is prefixed `digitalocean_<group>_` so tools from different "
+    "resource groups never collide by name."
 )
 
 
@@ -51,12 +67,16 @@ def build_fastmcp() -> FastMCP:
         stateless_http=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
+    apps.register(mcp)
+    deployments.register(mcp)
+    observability.register(mcp)
+    reference.register(mcp)
     inference.register(mcp)
     return mcp
 
 
 async def health(_: Request) -> JSONResponse:
-    """Pure local probe -- never calls DigitalOcean (SOP section 1.1)."""
+    """Pure local probe — never calls DigitalOcean (SOP section 1.1)."""
     return JSONResponse({"status": "ok"})
 
 
@@ -64,7 +84,7 @@ def build_app(settings: Settings | None = None) -> Starlette:
     settings = settings or get_settings()
     mcp = build_fastmcp()
     # FastMCP's streamable_http_app() already registers the "/mcp" route
-    # itself, so it is mounted at "/" here -- mounting it under "/mcp" again
+    # itself, so it is mounted at "/" here — mounting it under "/mcp" again
     # would make the real endpoint "/mcp/mcp".
     mcp_app = mcp.streamable_http_app()
 

@@ -1,1 +1,1 @@
-"""DigitalOcean MCP server (Serverless Inference resource group)."""
+"""DigitalOcean MCP server (Apps, Inference, and other resource groups)."""

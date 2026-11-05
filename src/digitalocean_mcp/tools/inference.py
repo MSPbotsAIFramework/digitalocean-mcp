@@ -9,7 +9,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from digitalocean_mcp.tools._shared import bounded_dumps, get_client, tool_guard
+from digitalocean_mcp.tools._shared import bounded_dumps, get_inference_client, tool_guard
 
 
 def register(mcp: FastMCP) -> None:
@@ -20,7 +20,7 @@ def register(mcp: FastMCP) -> None:
 
         No arguments. Returns each model's id, creation timestamp, and owner.
         """
-        async with await get_client() as client:
+        async with await get_inference_client() as client:
             body = await client.request("GET", "/v1/models")
         models = body.get("data") or []
         return bounded_dumps(
@@ -52,7 +52,7 @@ def register(mcp: FastMCP) -> None:
             body["max_tokens"] = max_tokens
         if temperature is not None:
             body["temperature"] = temperature
-        async with await get_client() as client:
+        async with await get_inference_client() as client:
             result = await client.request("POST", "/v1/chat/completions", json_body=body)
         choice = (result.get("choices") or [{}])[0]
         message = choice.get("message") or {}
@@ -72,7 +72,7 @@ def register(mcp: FastMCP) -> None:
         Args: model - catalog embedding model id. input - a single string or
         a list of strings to embed.
         """
-        async with await get_client() as client:
+        async with await get_inference_client() as client:
             result = await client.request(
                 "POST", "/v1/embeddings", json_body={"model": model, "input": input}
             )
@@ -107,7 +107,7 @@ def register(mcp: FastMCP) -> None:
             body["size"] = size
         if output_format is not None:
             body["output_format"] = output_format
-        async with await get_client() as client:
+        async with await get_inference_client() as client:
             result = await client.request("POST", "/v1/images/generations", json_body=body)
         images = result.get("data") or []
         return bounded_dumps(
