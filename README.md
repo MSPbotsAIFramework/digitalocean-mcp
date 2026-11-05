@@ -1,11 +1,11 @@
 # digitalocean-mcp
 
-MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers two resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; and Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them.
+MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers three resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them; and Kubernetes (DOKS) — managing clusters and their node pools, including upgrades, kubeconfig/credentials, and node-level operations.
 
 - **Transport**: MCP Streamable HTTP (`POST /mcp`) + `GET /health`.
 - **Tech stack**: Python 3.12, [FastMCP](https://github.com/modelcontextprotocol/python-sdk), `httpx`, `pydantic-settings`.
 - **License**: Apache-2.0 (see [LICENSE](LICENSE)). Copyright MSPbots.ai.
-- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. Apps and Inference are documented below; Kubernetes and Networking land on their own tickets.
+- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. Apps, Inference, and Kubernetes are documented below; Networking lands on its own ticket.
 
 <!-- BEGIN MSPBOTS CONNECTOR SECTION (verbatim copy of vendor-mcp-development's reference/readme-connector-section.md — do not edit by hand, see tests/test_readme.py) -->
 <div align="center">
@@ -89,7 +89,7 @@ Links: [connect.mspbots.ai](https://connect.mspbots.ai) · [mspbots.ai](https://
 
 Missing this header returns HTTP 401 with the header name in the response body — no request ever reaches DigitalOcean's API without it.
 
-## Tools (22)
+## Tools (38)
 
 Every tool is prefixed `digitalocean_<group>_` so tools from different resource groups never collide by name.
 
@@ -126,6 +126,29 @@ Destructive tools (`delete_app`, `restart_app`, `cancel_deployment`, and `manage
 | `digitalocean_inference_create_chat_completion` | Generate a chat completion from a catalog model. |
 | `digitalocean_inference_create_embedding` | Create one embedding vector per input string. |
 | `digitalocean_inference_generate_image` | Generate image(s) from a text prompt; not read-only, consumes quota. |
+
+### Kubernetes (16)
+
+| Tool | Description |
+|---|---|
+| `digitalocean_kubernetes_list_clusters` | List DigitalOcean Kubernetes (DOKS) clusters in the account. |
+| `digitalocean_kubernetes_get_cluster` | Get one cluster's spec, status, and node-pool summary. |
+| `digitalocean_kubernetes_create_cluster` | Create a new DOKS cluster with at least one node pool. |
+| `digitalocean_kubernetes_update_cluster` | Partially update a cluster: only the fields supplied here change. |
+| `digitalocean_kubernetes_upgrade_cluster` | Trigger a control-plane upgrade. Disruptive maintenance operation. |
+| `digitalocean_kubernetes_list_cluster_resources` | List load balancers, volumes, and volume snapshots associated with a cluster. |
+| `digitalocean_kubernetes_delete_cluster` | Delete a cluster. No default mode -- the caller must choose one. |
+| `digitalocean_kubernetes_get_kubeconfig` | Get a cluster's raw kubeconfig YAML. Never logged, never truncated. |
+| `digitalocean_kubernetes_get_credentials` | Get a cluster's structured credential bundle (server/token/expires_at). |
+| `digitalocean_kubernetes_list_node_pools` | List every node pool in a cluster, with node-level detail. |
+| `digitalocean_kubernetes_get_node_pool` | Get one node pool by id. |
+| `digitalocean_kubernetes_create_node_pool` | Add a new node pool to a cluster. |
+| `digitalocean_kubernetes_update_node_pool` | Resize or reconfigure a node pool. Repeating the same call converges to the same state. |
+| `digitalocean_kubernetes_delete_node_pool` | Delete a node pool. Irreversible; requires the explicit pool id. |
+| `digitalocean_kubernetes_delete_node` | Remove one node. No bulk/"all nodes in pool" variant exists. |
+| `digitalocean_kubernetes_get_deployment_options` | List valid regions, Kubernetes versions, and node sizes for DOKS. |
+
+Destructive tools (`delete_cluster`, `upgrade_cluster`, `delete_node_pool`, `delete_node`) always require an explicit resource id (and, for `delete_cluster`, an explicit `mode` -- there is no default). `get_kubeconfig` and `get_credentials` return maximally privileged cluster-admin artifacts and are never logged.
 
 ## Errors
 

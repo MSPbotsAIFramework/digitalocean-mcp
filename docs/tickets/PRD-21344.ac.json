@@ -4,199 +4,326 @@
     "ac": "AC1",
     "text": "Given the connector is running, When tools/list is called, Then it returns exactly 16 digitalocean_kubernetes_* tools, each with description first-line <=100 chars, full text <=500 chars, and correct readOnlyHint/destructiveHint/idempotentHint",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_tools_list_snapshot"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_tools_list_snapshot"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_tools_list_snapshot -> 1 passed; asserts 16 tool names, description length <=100/500 chars, and readOnly/destructive/idempotent hints for all 16 (2026-11-05, uv run pytest, full suite 88 passed)"
   },
   {
     "id": "TC2",
     "ac": "AC2",
     "text": "Given a tools/call request missing the X-DigitalOcean-Api-Token header, When any Kubernetes tool is invoked, Then the response is HTTP 401 and the body lists the required header name, and the mocked upstream client is never invoked",
     "type": "auto",
-    "tests": ["tests/test_middleware.py::test_missing_header_returns_401"]
+    "tests": [
+      "tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call -> passed; also verified live via curl: POST /mcp with no X-DigitalOcean-Api-Token header -> HTTP 401 {\"error\":{\"code\":\"not_configured\",...}} (2026-11-05 local smoke test)"
   },
   {
     "id": "TC3",
     "ac": "AC3",
     "text": "Given 60 mocked clusters, When digitalocean_kubernetes_list_clusters is called with no arguments, Then it returns 50 with has_more=true; given 250 mocked clusters, When called with limit=500, Then it returns at most 200",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_list_clusters_default_pagination", "tests/kubernetes/test_tools.py::test_list_clusters_hard_cap_200"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_list_clusters_default_pagination",
+      "tests/kubernetes/test_tools.py::test_list_clusters_hard_cap_200"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_list_clusters_default_pagination test_list_clusters_hard_cap_200 -> 2 passed; limit=500 against 250 mocked clusters asserted per_page=200 sent and has_more=true"
   },
   {
     "id": "TC4",
     "ac": "AC4",
     "text": "Given a mocked cluster, When digitalocean_kubernetes_get_cluster is called with no flags, Then it returns spec/status/node-pool summary; When called with include_upgrades=true, Then it also includes the mocked available-upgrades list (including an empty-list case); When called with include_status_messages=true, Then it also includes mocked status messages; given an unknown id, Then it returns a structured not_found error",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_get_cluster_base_fields", "tests/kubernetes/test_tools.py::test_get_cluster_include_upgrades", "tests/kubernetes/test_tools.py::test_get_cluster_include_status_messages", "tests/kubernetes/test_tools.py::test_get_cluster_unknown_id_not_found"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_get_cluster_base_fields",
+      "tests/kubernetes/test_tools.py::test_get_cluster_include_upgrades",
+      "tests/kubernetes/test_tools.py::test_get_cluster_include_status_messages",
+      "tests/kubernetes/test_tools.py::test_get_cluster_unknown_id_not_found"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_get_cluster_base_fields test_get_cluster_include_upgrades test_get_cluster_include_status_messages test_get_cluster_unknown_id_not_found -> 4 passed"
   },
   {
     "id": "TC5",
     "ac": "AC5",
     "text": "Given a mocked 422 validation response from DigitalOcean, When digitalocean_kubernetes_create_cluster is called, Then the error is surfaced as a structured invalid_argument carrying DigitalOcean's message",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_create_cluster_validation_error_maps_to_invalid_argument"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_create_cluster_validation_error_maps_to_invalid_argument"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_create_cluster_validation_error_maps_to_invalid_argument -> passed; mocked 422 maps to invalid_argument carrying DigitalOcean's message"
   },
   {
     "id": "TC6",
     "ac": "AC6",
     "text": "Given an existing cluster, When digitalocean_kubernetes_update_cluster is called with only {\"tags\": [\"prod\"]}, Then the outbound request body contains only that field and the tool description text states this is a partial update (not a full-spec replace)",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_update_cluster_sends_only_supplied_fields", "tests/kubernetes/test_tools.py::test_update_cluster_description_states_partial_update"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_update_cluster_sends_only_supplied_fields",
+      "tests/kubernetes/test_tools.py::test_update_cluster_description_states_partial_update"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_update_cluster_sends_only_supplied_fields test_update_cluster_description_states_partial_update -> 2 passed; outbound PUT body asserted == {\"tags\": [\"prod\"]}"
   },
   {
     "id": "TC7",
     "ac": "AC7",
     "text": "Given no version argument, When digitalocean_kubernetes_upgrade_cluster is called, Then it is rejected with invalid_argument before any HTTP call; given an explicit version, Then it triggers the mocked upgrade endpoint and is annotated destructiveHint=true",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_upgrade_cluster_requires_explicit_version", "tests/kubernetes/test_tools.py::test_upgrade_cluster_destructive_hint"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_upgrade_cluster_requires_explicit_version",
+      "tests/kubernetes/test_tools.py::test_upgrade_cluster_destructive_hint"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_upgrade_cluster_requires_explicit_version test_upgrade_cluster_destructive_hint -> 2 passed; missing version rejected with 0 HTTP calls, explicit version calls POST .../upgrade"
   },
   {
     "id": "TC8",
     "ac": "AC8",
     "text": "Given a mocked cluster with associated load balancers, volumes, and volume snapshots, When digitalocean_kubernetes_list_cluster_resources is called, Then it returns each with id and name, annotated readOnlyHint=true",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_list_cluster_resources"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_list_cluster_resources"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_list_cluster_resources -> passed; load_balancers/volumes/volume_snapshots trimmed to id+name"
   },
   {
     "id": "TC9",
     "ac": "AC9",
     "text": "Given digitalocean_kubernetes_delete_cluster is called with no mode, Then it is rejected before any HTTP call; mode=plain calls only the plain DELETE; mode=selective without explicit id lists is rejected, with id lists calls the selective-destroy endpoint with exactly those ids; mode=dangerous calls the dangerous-destroy endpoint and the tool description text states irreversibility",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_delete_cluster_requires_mode", "tests/kubernetes/test_tools.py::test_delete_cluster_plain", "tests/kubernetes/test_tools.py::test_delete_cluster_selective_requires_ids", "tests/kubernetes/test_tools.py::test_delete_cluster_selective_with_ids", "tests/kubernetes/test_tools.py::test_delete_cluster_dangerous_description_states_irreversible"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_delete_cluster_requires_mode",
+      "tests/kubernetes/test_tools.py::test_delete_cluster_plain",
+      "tests/kubernetes/test_tools.py::test_delete_cluster_selective_requires_ids",
+      "tests/kubernetes/test_tools.py::test_delete_cluster_selective_with_ids",
+      "tests/kubernetes/test_tools.py::test_delete_cluster_dangerous_description_states_irreversible"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_delete_cluster_requires_mode test_delete_cluster_plain test_delete_cluster_selective_requires_ids test_delete_cluster_selective_with_ids test_delete_cluster_dangerous_description_states_irreversible -> 5 passed"
   },
   {
     "id": "TC10",
     "ac": "AC10",
     "text": "Given a mocked kubeconfig response, When digitalocean_kubernetes_get_kubeconfig is called, Then it returns the raw YAML string unmodified, and the value never appears in captured log output",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_get_kubeconfig_returns_raw_yaml", "tests/kubernetes/test_tools.py::test_get_kubeconfig_never_logged"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_get_kubeconfig_returns_raw_yaml",
+      "tests/kubernetes/test_tools.py::test_get_kubeconfig_never_logged"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_get_kubeconfig_returns_raw_yaml test_get_kubeconfig_never_logged -> 2 passed; raw YAML returned unmodified, secret token string absent from all caplog records"
   },
   {
     "id": "TC11",
     "ac": "AC11",
     "text": "Given a mocked credentials response, When digitalocean_kubernetes_get_credentials is called, Then it returns the structured bundle (server/token/expires_at), distinct in shape from TC10's YAML string, and the token value never appears in captured log output",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_get_credentials_returns_structured_bundle", "tests/kubernetes/test_tools.py::test_get_credentials_never_logged"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_get_credentials_returns_structured_bundle",
+      "tests/kubernetes/test_tools.py::test_get_credentials_never_logged"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_get_credentials_returns_structured_bundle test_get_credentials_never_logged -> 2 passed; structured server/token/expires_at bundle, token absent from caplog records"
   },
   {
     "id": "TC12",
     "ac": "AC12",
     "text": "Given mocked node pools, When digitalocean_kubernetes_list_node_pools or get_node_pool is called, Then it returns name/size/count/labels/taints/autoscale/node fields; given an unknown pool id, Then it returns not_found",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_list_node_pools_fields", "tests/kubernetes/test_tools.py::test_get_node_pool_fields", "tests/kubernetes/test_tools.py::test_get_node_pool_unknown_id_not_found"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_list_node_pools_fields",
+      "tests/kubernetes/test_tools.py::test_get_node_pool_fields",
+      "tests/kubernetes/test_tools.py::test_get_node_pool_unknown_id_not_found"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_list_node_pools_fields test_get_node_pool_fields test_get_node_pool_unknown_id_not_found -> 3 passed"
   },
   {
     "id": "TC13",
     "ac": "AC13",
     "text": "Given a mocked min_nodes/max_nodes inconsistency response (auto_scale=true, min_nodes=5, max_nodes=3), When digitalocean_kubernetes_create_node_pool is called, Then it surfaces a structured invalid_argument error",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_create_node_pool_autoscale_validation_error"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_create_node_pool_autoscale_validation_error"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_create_node_pool_autoscale_validation_error -> passed; mocked 422 autoscale inconsistency maps to invalid_argument"
   },
   {
     "id": "TC14",
     "ac": "AC14",
     "text": "Given digitalocean_kubernetes_update_node_pool resizing count, Then it is annotated idempotentHint=true and two identical mocked calls in sequence produce the same resulting state",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_update_node_pool_idempotent_hint", "tests/kubernetes/test_tools.py::test_update_node_pool_repeat_call_converges"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_update_node_pool_idempotent_hint",
+      "tests/kubernetes/test_tools.py::test_update_node_pool_repeat_call_converges"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_update_node_pool_idempotent_hint test_update_node_pool_repeat_call_converges -> 2 passed"
   },
   {
     "id": "TC15",
     "ac": "AC15",
     "text": "Given digitalocean_kubernetes_delete_node_pool is called with no node_pool_id, Then it is rejected; given an explicit id, Then it calls the mocked DELETE and the tool description text states irreversibility",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_delete_node_pool_requires_id", "tests/kubernetes/test_tools.py::test_delete_node_pool_description_states_irreversible"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_delete_node_pool_requires_id",
+      "tests/kubernetes/test_tools.py::test_delete_node_pool_description_states_irreversible"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_delete_node_pool_requires_id test_delete_node_pool_description_states_irreversible -> 2 passed"
   },
   {
     "id": "TC16",
     "ac": "AC16",
     "text": "Given digitalocean_kubernetes_delete_node is called missing cluster_id/node_pool_id/node_id, Then it is rejected; replace=false (default) calls DELETE with replace=0; replace=true calls DELETE with replace=1 and the description text states this is the modern replacement for the deprecated recycle endpoint; the tool signature has no bulk/list argument",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_delete_node_requires_explicit_ids", "tests/kubernetes/test_tools.py::test_delete_node_replace_false_default", "tests/kubernetes/test_tools.py::test_delete_node_replace_true_sends_replace_1", "tests/kubernetes/test_tools.py::test_delete_node_has_no_bulk_argument"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_delete_node_requires_explicit_ids",
+      "tests/kubernetes/test_tools.py::test_delete_node_replace_false_default",
+      "tests/kubernetes/test_tools.py::test_delete_node_replace_true_sends_replace_1",
+      "tests/kubernetes/test_tools.py::test_delete_node_has_no_bulk_argument"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_delete_node_requires_explicit_ids test_delete_node_replace_false_default test_delete_node_replace_true_sends_replace_1 test_delete_node_has_no_bulk_argument -> 4 passed; signature has exactly {cluster_id,node_pool_id,node_id,skip_drain,replace}"
   },
   {
     "id": "TC17",
     "ac": "AC17",
     "text": "Given a mocked options response, When digitalocean_kubernetes_get_deployment_options is called with no arguments, Then it returns regions/versions/sizes, annotated readOnlyHint=true and idempotentHint=true",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_get_deployment_options"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_get_deployment_options"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_get_deployment_options -> passed; readOnlyHint=true, idempotentHint=true asserted"
   },
   {
     "id": "TC18",
     "ac": "AC18",
     "text": "Given two concurrent tools/call requests carrying two different tenants' X-DigitalOcean-Api-Token values, When both complete, Then each sees only its own token in the outbound Authorization header and only its own response data",
     "type": "auto",
-    "tests": ["tests/test_middleware.py::test_concurrent_requests_do_not_cross_contaminate_tenant_tokens"]
+    "tests": [
+      "tests/test_middleware.py::test_concurrent_requests_do_not_leak_credentials_across_tenants_kubernetes"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/test_middleware.py::test_concurrent_requests_do_not_leak_credentials_across_tenants_kubernetes -> passed; two concurrent requests with token-A/token-B each see only their own Authorization header"
   },
   {
     "id": "TC19",
     "ac": "AC19",
     "text": "Given a mocked 429 response with Retry-After, When a tool call is in flight, Then it retries with backoff honoring Retry-After and, once the budget is exhausted, returns rate_limited; given a mocked 503, Then it retries and, once exhausted, returns upstream_error",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_client.py::test_429_retries_honoring_retry_after_then_rate_limited", "tests/kubernetes/test_client.py::test_5xx_retries_then_upstream_error"]
+    "tests": [
+      "tests/kubernetes/test_client.py::test_429_retries_honoring_retry_after_then_rate_limited",
+      "tests/kubernetes/test_client.py::test_5xx_retries_then_upstream_error"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_client.py::test_429_retries_honoring_retry_after_then_rate_limited test_5xx_retries_then_upstream_error (plus test_5xx_retries_then_succeeds_within_budget, test_request_raw_text_returns_unparsed_body_and_maps_errors) -> 4 passed"
   },
   {
     "id": "TC20",
     "ac": "AC20",
     "text": "Given the repository's README.md, Then it documents X-DigitalOcean-Api-Token (noting it is shared across resource groups), lists all 16 digitalocean_kubernetes_* tools, and its MSPbots Connector section matches the skill reference byte-for-byte",
     "type": "auto",
-    "tests": ["tests/kubernetes/test_tools.py::test_readme_documents_header_and_tool_table", "tests/kubernetes/test_tools.py::test_readme_connector_section_matches_reference"]
+    "tests": [
+      "tests/kubernetes/test_tools.py::test_readme_documents_kubernetes_header_and_tool_table",
+      "tests/test_readme.py::test_readme_connector_section_matches_reference_byte_for_byte"
+    ],
+    "result": "pass",
+    "evidence": "pytest tests/kubernetes/test_tools.py::test_readme_documents_kubernetes_header_and_tool_table tests/test_readme.py::test_readme_connector_section_matches_reference_byte_for_byte -> 2 passed; README lists all 16 tools and the shared header, connector section byte-identical to the SOP fixture"
   },
   {
     "id": "TC21",
     "ac": "AC4",
     "text": "Given a real DigitalOcean account and a real cluster, When digitalocean_kubernetes_get_cluster is called with include_upgrades=true and include_status_messages=true, Then the live response content and timing match the assumed shape",
     "type": "manual",
-    "steps": ["Connect a real DigitalOcean Personal Access Token", "Call get_cluster(cluster_id=<real cluster>, include_upgrades=true, include_status_messages=true)", "Compare the live response fields against the shape assumed in Tech design § Data & API contract"],
+    "steps": [
+      "Connect a real DigitalOcean Personal Access Token",
+      "Call get_cluster(cluster_id=<real cluster>, include_upgrades=true, include_status_messages=true)",
+      "Compare the live response fields against the shape assumed in Tech design \u00a7 Data & API contract"
+    ],
     "expect": "Live response includes available upgrades (or an empty list if current) and recent status messages, matching the assumed field shapes with no connector-side error",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria (missing test account does not block delivery to INT)"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria (missing test account does not block delivery to INT)"
   },
   {
     "id": "TC22",
     "ac": "AC7",
     "text": "Given a real DigitalOcean account and a disposable real cluster, When digitalocean_kubernetes_upgrade_cluster is called with a real target version, Then the control-plane upgrade completes end to end",
     "type": "manual",
-    "steps": ["Create a disposable real cluster on an older supported Kubernetes version", "Call get_cluster(include_upgrades=true) to obtain a real target version", "Call upgrade_cluster(cluster_id, version=<target>)", "Poll get_cluster until status is running on the new version"],
+    "steps": [
+      "Create a disposable real cluster on an older supported Kubernetes version",
+      "Call get_cluster(include_upgrades=true) to obtain a real target version",
+      "Call upgrade_cluster(cluster_id, version=<target>)",
+      "Poll get_cluster until status is running on the new version"
+    ],
     "expect": "Cluster reaches the target version with status running; no connector-side error during or after the upgrade",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria"
   },
   {
     "id": "TC23",
     "ac": "AC9",
     "text": "Given a real DigitalOcean account, When digitalocean_kubernetes_delete_cluster is exercised in all three modes (plain, selective, dangerous) against disposable real clusters, Then each mode's blast radius matches its documented behaviour",
     "type": "manual",
-    "steps": ["Create 3 disposable real clusters, each with an attached load balancer and volume", "Delete cluster 1 with mode=plain; confirm the LB/volume remain in the account", "Delete cluster 2 with mode=selective naming only the volume id; confirm only the volume is destroyed, the LB remains", "Delete cluster 3 with mode=dangerous; confirm the cluster and all associated resources are destroyed"],
+    "steps": [
+      "Create 3 disposable real clusters, each with an attached load balancer and volume",
+      "Delete cluster 1 with mode=plain; confirm the LB/volume remain in the account",
+      "Delete cluster 2 with mode=selective naming only the volume id; confirm only the volume is destroyed, the LB remains",
+      "Delete cluster 3 with mode=dangerous; confirm the cluster and all associated resources are destroyed"
+    ],
     "expect": "Each mode destroys exactly the resources its documentation states, no more and no less",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria"
   },
   {
     "id": "TC24",
     "ac": "AC10",
     "text": "Given a real DigitalOcean account and a real cluster, When digitalocean_kubernetes_get_kubeconfig is called, Then the real kubeconfig content and size are within the tool's non-functional bounds",
     "type": "manual",
-    "steps": ["Call get_kubeconfig(cluster_id=<real cluster>)", "Measure the returned string length", "Validate the YAML parses as a well-formed kubeconfig"],
-    "expect": "Kubeconfig is valid YAML, well under the 20,000-character exemption discussed in Tech design § Non-functional, and usable with kubectl",
+    "steps": [
+      "Call get_kubeconfig(cluster_id=<real cluster>)",
+      "Measure the returned string length",
+      "Validate the YAML parses as a well-formed kubeconfig"
+    ],
+    "expect": "Kubeconfig is valid YAML, well under the 20,000-character exemption discussed in Tech design \u00a7 Non-functional, and usable with kubectl",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria"
   },
   {
     "id": "TC25",
     "ac": "AC11",
     "text": "Given a real DigitalOcean account and a real cluster, When digitalocean_kubernetes_get_credentials is called, Then the real credentials bundle (token, expires_at) matches the assumed shape",
     "type": "manual",
-    "steps": ["Call get_credentials(cluster_id=<real cluster>)", "Confirm the response has server/token/expires_at fields", "Confirm the token authenticates against the server URL (out of band, not logged)"],
+    "steps": [
+      "Call get_credentials(cluster_id=<real cluster>)",
+      "Confirm the response has server/token/expires_at fields",
+      "Confirm the token authenticates against the server URL (out of band, not logged)"
+    ],
     "expect": "Credentials bundle matches the assumed shape and the token is valid against the live cluster",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria"
   },
   {
     "id": "TC26",
     "ac": "AC16",
     "text": "Given a real DigitalOcean account and a real node pool, When digitalocean_kubernetes_delete_node is called with replace=true, Then DigitalOcean provisions a replacement node after removing the original",
     "type": "manual",
-    "steps": ["Note the node ids in a real node pool with count>=2", "Call delete_node(cluster_id, node_pool_id, node_id=<one of them>, replace=true)", "Poll list_node_pools until the pool's node count returns to its original value with a new node id in place of the removed one"],
+    "steps": [
+      "Note the node ids in a real node pool with count>=2",
+      "Call delete_node(cluster_id, node_pool_id, node_id=<one of them>, replace=true)",
+      "Poll list_node_pools until the pool's node count returns to its original value with a new node id in place of the removed one"
+    ],
     "expect": "The removed node is gone and a new node appears in the pool; pool count matches the pre-call count",
     "result": "blocked",
-    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md §3 completion criteria"
+    "evidence": "needs a real vendor account; not executed in this design/dev cycle per mcp-track.md \u00a73 completion criteria"
   }
 ]
