@@ -29,7 +29,17 @@ from starlette.routing import Mount, Route
 
 from digitalocean_mcp.middleware import CredentialMiddleware
 from digitalocean_mcp.settings import Settings, get_settings
-from digitalocean_mcp.tools import apps, deployments, inference, observability, reference
+from digitalocean_mcp.tools import (
+    apps,
+    deployments,
+    inference,
+    kubernetes,
+    kubernetes_access,
+    kubernetes_node_pools,
+    kubernetes_reference,
+    observability,
+    reference,
+)
 
 SERVICE_INSTRUCTIONS = (
     "DigitalOcean connector. Covers two DigitalOcean resource groups so far:\n"
@@ -55,6 +65,19 @@ SERVICE_INSTRUCTIONS = (
     "of the catalog's model ids. list_models is read-only; the other three "
     "tools create new content and consume the tenant's DigitalOcean quota.\n"
     "\n"
+    "Kubernetes — DOKS cluster and node-pool management. Core concepts: a "
+    "cluster has a spec (region, version, HA) and one or more node pools; "
+    "each node pool has a size, a node count, and optional autoscale "
+    "bounds. Typical flow: list/get_cluster -> get_deployment_options for "
+    "valid regions/versions/sizes -> create_cluster with at least one node "
+    "pool -> list/get/create/update_node_pool to manage capacity -> "
+    "get_kubeconfig or get_credentials to connect kubectl. "
+    "list_cluster_resources shows what delete_cluster(mode=\"dangerous\") "
+    "would also destroy. All destructive actions (delete_cluster, "
+    "delete_node_pool, delete_node, upgrade_cluster) require an explicit "
+    "resource id and, for delete_cluster, an explicit mode -- there is no "
+    "default mode and no bulk/name-based variant.\n"
+    "\n"
     "Every tool is prefixed `digitalocean_<group>_` so tools from different "
     "resource groups never collide by name."
 )
@@ -72,6 +95,10 @@ def build_fastmcp() -> FastMCP:
     observability.register(mcp)
     reference.register(mcp)
     inference.register(mcp)
+    kubernetes.register(mcp)
+    kubernetes_access.register(mcp)
+    kubernetes_node_pools.register(mcp)
+    kubernetes_reference.register(mcp)
     return mcp
 
 
