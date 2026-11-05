@@ -23,6 +23,7 @@ from digitalocean_mcp.client import DigitalOceanClient
 from digitalocean_mcp.inference_client import DigitalOceanInferenceClient
 from digitalocean_mcp.kubernetes_client import DigitalOceanKubernetesClient
 from digitalocean_mcp.middleware import CREDENTIAL_HEADER, CredentialMiddleware, get_api_token
+from digitalocean_mcp.networking_client import DigitalOceanNetworkingClient
 from digitalocean_mcp.settings import Settings
 
 
@@ -223,6 +224,48 @@ async def test_concurrent_requests_do_not_leak_credentials_across_tenants_kubern
             await asyncio.sleep(0.01)
             async with DigitalOceanKubernetesClient(token, Settings(), transport=transport) as client:
                 await client.request("GET", "/v2/kubernetes/clusters")
+            results[label] = token
+            await _respond_200(send)
+
+        return downstream
+
+    middleware_a = CredentialMiddleware(make_downstream("A"), mcp_path="/mcp")
+    middleware_b = CredentialMiddleware(make_downstream("B"), mcp_path="/mcp")
+
+    await asyncio.gather(
+        call_asgi(middleware_a, path="/mcp", headers={CREDENTIAL_HEADER: "token-A"}),
+        call_asgi(middleware_b, path="/mcp", headers={CREDENTIAL_HEADER: "token-B"}),
+    )
+
+    assert results["A"] == "token-A"
+    assert results["B"] == "token-B"
+    assert set(captured_auth_headers) == {"Bearer token-A", "Bearer token-B"}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_do_not_leak_credentials_across_tenants():
+    """AC15 / TC17 (Networking): two tenants' tokens must never leak into
+    each other's outbound call through the Networking resource group's
+    client. A distinct client class and upstream path from the Apps/
+    Kubernetes/Inference tests above, so each resource group's own client is
+    covered."""
+
+    captured_auth_headers: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_auth_headers.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"vpcs": []})
+
+    transport = httpx.MockTransport(handler)
+    results: dict[str, str | None] = {}
+
+    def make_downstream(label: str):
+        async def downstream(scope, receive, send):
+            token = get_api_token()
+            # Force interleaving so a global/module-level bug would actually surface.
+            await asyncio.sleep(0.01)
+            async with DigitalOceanNetworkingClient(token, Settings(), transport=transport) as client:
+                await client.request("GET", "/v2/vpcs")
             results[label] = token
             await _respond_200(send)
 

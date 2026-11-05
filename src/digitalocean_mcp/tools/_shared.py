@@ -14,13 +14,14 @@ carry `SECRET`-type environment variables) to just its type name, so a
 tenant secret embedded in a tool argument can never reach the logs.
 
 `get_client()` builds a client for the Apps resource group (PRD-21338) by
-default, since that was this module's original caller; `get_inference_client()`
-and `get_kubernetes_client()` are the equivalents for the Serverless
-Inference (PRD-21343) and Kubernetes (PRD-21344) resource groups -- each
-DigitalOcean resource group talks to a different upstream base URL via its
-own client class (see `client.py` / `inference_client.py` /
-`kubernetes_client.py`), but all three share this module's
-transport-override test hook, error boundary, and tool-call logging.
+default, since that was this module's original caller; `get_inference_client()`,
+`get_kubernetes_client()`, and `get_networking_client()` are the equivalents
+for the Serverless Inference (PRD-21343), Kubernetes (PRD-21344), and
+Networking (PRD-21345) resource groups -- each DigitalOcean resource group
+talks to a different upstream base URL via its own client class (see
+`client.py` / `inference_client.py` / `kubernetes_client.py` /
+`networking_client.py`), but all four share this module's transport-override
+test hook, error boundary, and tool-call logging.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ from digitalocean_mcp.errors import ToolError, build_error
 from digitalocean_mcp.inference_client import DigitalOceanInferenceClient
 from digitalocean_mcp.kubernetes_client import DigitalOceanKubernetesClient
 from digitalocean_mcp.middleware import require_token
+from digitalocean_mcp.networking_client import DigitalOceanNetworkingClient
 from digitalocean_mcp.settings import get_settings
 from digitalocean_mcp.telemetry import elapsed_ms, log_event
 
@@ -92,6 +94,11 @@ async def get_inference_client() -> DigitalOceanInferenceClient:
 async def get_kubernetes_client() -> DigitalOceanKubernetesClient:
     """`get_client()` specialized for the Kubernetes Service resource group."""
     return await get_client(DigitalOceanKubernetesClient)
+
+
+async def get_networking_client() -> DigitalOceanNetworkingClient:
+    """`get_client()` specialized for the Networking resource group."""
+    return await get_client(DigitalOceanNetworkingClient)
 
 
 def dumps(payload: Any) -> str:

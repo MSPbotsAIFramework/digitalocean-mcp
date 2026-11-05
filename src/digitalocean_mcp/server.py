@@ -37,12 +37,16 @@ from digitalocean_mcp.tools import (
     kubernetes_access,
     kubernetes_node_pools,
     kubernetes_reference,
+    networking_dns,
+    networking_firewalls,
+    networking_load_balancers,
+    networking_vpcs,
     observability,
     reference,
 )
 
 SERVICE_INSTRUCTIONS = (
-    "DigitalOcean connector. Covers two DigitalOcean resource groups so far:\n"
+    "DigitalOcean connector. Covers four DigitalOcean resource groups so far:\n"
     "\n"
     "Apps (App Platform) — the PaaS that builds and runs apps from a Git repo "
     "or container image. Core concepts: an app has a spec (services, static "
@@ -78,6 +82,21 @@ SERVICE_INSTRUCTIONS = (
     "resource id and, for delete_cluster, an explicit mode -- there is no "
     "default mode and no bulk/name-based variant.\n"
     "\n"
+    "Networking — VPCs (incl. peering), Cloud Firewalls, Domains/DNS, and "
+    "Load Balancers. Typical flows: list_vpcs/list_firewalls/list_domains/"
+    "list_load_balancers with no id to enumerate, or with an id for full "
+    "detail (list_vpcs also merges in member count and peerings); "
+    "manage_vpc_peering and manage_domain_record are action-based "
+    "(list/get/create/update/delete) lifecycle tools for their sub-resource. "
+    "update_firewall and update_load_balancer are whole-object PUT replaces "
+    "(any rule/Droplet/forwarding-rule left out is removed, not kept) while "
+    "update_vpc is a PATCH partial update (only the given field changes) -- "
+    "read the current full state first before calling either update tool. "
+    "All destructive actions (delete_vpc, delete_firewall, delete_domain, "
+    "delete_load_balancer, and manage_vpc_peering/manage_domain_record's "
+    "delete action) require an explicit resource id -- there is no "
+    "name-based or bulk variant.\n"
+    "\n"
     "Every tool is prefixed `digitalocean_<group>_` so tools from different "
     "resource groups never collide by name."
 )
@@ -99,6 +118,10 @@ def build_fastmcp() -> FastMCP:
     kubernetes_access.register(mcp)
     kubernetes_node_pools.register(mcp)
     kubernetes_reference.register(mcp)
+    networking_vpcs.register(mcp)
+    networking_firewalls.register(mcp)
+    networking_dns.register(mcp)
+    networking_load_balancers.register(mcp)
     return mcp
 
 
