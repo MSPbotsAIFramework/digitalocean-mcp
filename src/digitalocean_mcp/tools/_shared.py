@@ -12,6 +12,14 @@ is one. Argument redaction keeps short scalars (ids, flags, limits) as-is
 and collapses anything else (dicts, lists — e.g. an app `spec`, which can
 carry `SECRET`-type environment variables) to just its type name, so a
 tenant secret embedded in a tool argument can never reach the logs.
+
+`get_client()` builds a client for the Apps resource group (PRD-21338) by
+default, since that was this module's original caller; `get_inference_client()`
+is the equivalent for the Serverless Inference resource group (PRD-21343) --
+each DigitalOcean resource group talks to a different upstream base URL via
+its own client class (see `client.py` / `inference_client.py`), but both
+share this module's transport-override test hook, error boundary, and
+tool-call logging.
 """
 
 from __future__ import annotations
@@ -26,6 +34,7 @@ import httpx
 
 from digitalocean_mcp.client import DigitalOceanClient
 from digitalocean_mcp.errors import ToolError, build_error
+from digitalocean_mcp.inference_client import DigitalOceanInferenceClient
 from digitalocean_mcp.middleware import require_token
 from digitalocean_mcp.settings import get_settings
 from digitalocean_mcp.telemetry import elapsed_ms, log_event
@@ -40,12 +49,14 @@ _SAFE_SCALAR_TYPES = (str, int, float, bool)
 _MAX_SCALAR_LOG_LEN = 200
 
 F = TypeVar("F", bound=Callable[..., Awaitable[str]])
+C = TypeVar("C")
 
 # Test-only hook: replaces the real network transport with an
 # httpx.MockTransport so unit tests exercise the real request/retry/error
 # code path without a network call or a real DigitalOcean account. The
 # credential token still comes from the real per-request ContextVar
-# (`require_token()`), so concurrency/isolation tests (AC13) stay meaningful.
+# (`require_token()`), so concurrency/isolation tests across every resource
+# group stay meaningful.
 _transport_override: httpx.BaseTransport | Callable[[], httpx.BaseTransport] | None = None
 
 
@@ -56,13 +67,24 @@ def set_transport_override(
     _transport_override = transport
 
 
-async def get_client() -> DigitalOceanClient:
+async def get_client(client_cls: type[C] = DigitalOceanClient) -> C:
+    """Build a per-call client of `client_cls` (default: the Apps client).
+
+    Every resource group's client takes the same `(token, settings, *,
+    transport=...)` constructor shape, so this factory is generic over the
+    class rather than hard-coding one resource group's client.
+    """
     token = await require_token()
     settings = get_settings()
     if _transport_override is not None:
         transport = _transport_override() if callable(_transport_override) else _transport_override
-        return DigitalOceanClient(token, settings, transport=transport)
-    return DigitalOceanClient(token, settings)
+        return client_cls(token, settings, transport=transport)
+    return client_cls(token, settings)
+
+
+async def get_inference_client() -> DigitalOceanInferenceClient:
+    """`get_client()` specialized for the Serverless Inference resource group."""
+    return await get_client(DigitalOceanInferenceClient)
 
 
 def dumps(payload: Any) -> str:

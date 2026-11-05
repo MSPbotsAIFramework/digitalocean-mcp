@@ -1,7 +1,7 @@
 [project]
 name = "digitalocean-mcp"
 version = "0.1.0"
-description = "DigitalOcean App Platform MCP server for the MSPbots Agent platform"
+description = "DigitalOcean MCP server for the MSPbots Agent platform"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }

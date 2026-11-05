@@ -1,7 +1,12 @@
-"""Tests for the credential middleware: TC3 (AC2) and TC17 (AC13).
+"""Tests for the credential middleware: TC3 (AC2, Apps) / TC2 (AC2, Inference),
+TC17 (AC13, Apps) / TC10 (AC9, Inference) -- concurrency isolation is tested
+once per resource group's own client class, since each talks to a different
+upstream base URL and the point of the test is that neither client lets one
+tenant's token leak into another's outbound call.
 
-Also covers the request-id / logging behaviour added in review round 1
-(must-fix: structured logging, SOP section 6).
+Also covers the request-id / logging behaviour added in review round 1 of
+PRD-21338 (must-fix: structured logging, SOP section 6), which the shared
+`CredentialMiddleware` applies to every resource group's requests alike.
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ import pytest
 
 from digitalocean_mcp import telemetry
 from digitalocean_mcp.client import DigitalOceanClient
+from digitalocean_mcp.inference_client import DigitalOceanInferenceClient
 from digitalocean_mcp.middleware import CREDENTIAL_HEADER, CredentialMiddleware, get_api_token
 from digitalocean_mcp.settings import Settings
 
@@ -156,7 +162,8 @@ async def test_header_present_value_reaches_tool_via_context_var():
 
 @pytest.mark.asyncio
 async def test_concurrent_requests_do_not_cross_contaminate_credentials():
-    """AC13 / TC17: two tenants' tokens must never leak into each other's outbound call."""
+    """AC13 / TC17 (Apps): two tenants' tokens must never leak into each
+    other's outbound call through the Apps resource group's client."""
 
     captured_auth_headers: list[str] = []
 
@@ -174,6 +181,47 @@ async def test_concurrent_requests_do_not_cross_contaminate_credentials():
             await asyncio.sleep(0.01)
             async with DigitalOceanClient(token, Settings(), transport=transport) as client:
                 await client.request("GET", "/v2/apps")
+            results[label] = token
+            await _respond_200(send)
+
+        return downstream
+
+    middleware_a = CredentialMiddleware(make_downstream("A"), mcp_path="/mcp")
+    middleware_b = CredentialMiddleware(make_downstream("B"), mcp_path="/mcp")
+
+    await asyncio.gather(
+        call_asgi(middleware_a, path="/mcp", headers={CREDENTIAL_HEADER: "token-A"}),
+        call_asgi(middleware_b, path="/mcp", headers={CREDENTIAL_HEADER: "token-B"}),
+    )
+
+    assert results["A"] == "token-A"
+    assert results["B"] == "token-B"
+    assert set(captured_auth_headers) == {"Bearer token-A", "Bearer token-B"}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_do_not_leak_credentials_across_tenants_inference():
+    """AC9 / TC10 (Inference): two tenants' tokens must never leak into each
+    other's outbound call through the Serverless Inference resource group's
+    client. A distinct client class and upstream path from the Apps test
+    above, so both are kept rather than one standing in for the other."""
+
+    captured_auth_headers: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_auth_headers.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"object": "list", "data": []})
+
+    transport = httpx.MockTransport(handler)
+    results: dict[str, str | None] = {}
+
+    def make_downstream(label: str):
+        async def downstream(scope, receive, send):
+            token = get_api_token()
+            # Force interleaving so a global/module-level bug would actually surface.
+            await asyncio.sleep(0.01)
+            async with DigitalOceanInferenceClient(token, Settings(), transport=transport) as client:
+                await client.request("GET", "/v1/models")
             results[label] = token
             await _respond_200(send)
 

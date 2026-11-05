@@ -1,5 +1,7 @@
-"""AC15: README documents the credential header and carries the MSPbots
-Connector section verbatim (TC19, TC20).
+"""AC10/TC11 (Inference) and AC15/TC19-TC20 (Apps): README documents the
+shared credential header (both resource groups reuse the same
+`X-DigitalOcean-Api-Token` header, see docs/tickets/PRD-21343.md "Decisions
+made by DEV01") and carries the MSPbots Connector section verbatim.
 """
 
 from __future__ import annotations
@@ -19,8 +21,8 @@ def _extract_connector_section(readme_text: str) -> str:
     return readme_text[start_of_content:end]
 
 
-def test_connector_section_matches_skill_template_verbatim():
-    """TC19 (AC15).
+def test_readme_connector_section_matches_reference_byte_for_byte():
+    """TC11 (AC10) / TC19 (AC15).
 
     The fixture is a checked-in copy of vendor-mcp-development's
     reference/readme-connector-section.md. If that template is ever updated,
@@ -32,6 +34,23 @@ def test_connector_section_matches_skill_template_verbatim():
     readme_text = README.read_text()
     section = _extract_connector_section(readme_text)
     assert section == fixture_text
+
+
+def test_readme_documents_inference_header_and_tools():
+    """TC11 (AC10)."""
+    text = README.read_text()
+    assert "## Authentication headers" in text
+    assert "X-DigitalOcean-Api-Token" in text
+    assert "Personal Access Token" in text and "Model Access Key" in text, (
+        "must document both ways to obtain a token"
+    )
+    for tool in (
+        "digitalocean_inference_list_models",
+        "digitalocean_inference_create_chat_completion",
+        "digitalocean_inference_create_embedding",
+        "digitalocean_inference_generate_image",
+    ):
+        assert tool in text, f"README tool table missing {tool}"
 
 
 def test_readme_documents_credential_header_and_creation_path():

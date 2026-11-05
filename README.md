@@ -1,11 +1,11 @@
 # digitalocean-mcp
 
-MCP server exposing DigitalOcean App Platform ("Apps") to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment.
+MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers two resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; and Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them.
 
 - **Transport**: MCP Streamable HTTP (`POST /mcp`) + `GET /health`.
 - **Tech stack**: Python 3.12, [FastMCP](https://github.com/modelcontextprotocol/python-sdk), `httpx`, `pydantic-settings`.
 - **License**: Apache-2.0 (see [LICENSE](LICENSE)). Copyright MSPbots.ai.
-- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps (this one), Inference Model Catalog, Kubernetes (DOKS), and Networking. Only the Apps tools are documented below.
+- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. Apps and Inference are documented below; Kubernetes and Networking land on their own tickets.
 
 <!-- BEGIN MSPBOTS CONNECTOR SECTION (verbatim copy of vendor-mcp-development's reference/readme-connector-section.md — do not edit by hand, see tests/test_readme.py) -->
 <div align="center">
@@ -85,13 +85,15 @@ Links: [connect.mspbots.ai](https://connect.mspbots.ai) · [mspbots.ai](https://
 
 | Header | Required | Type | Description |
 |---|---|---|---|
-| `X-DigitalOcean-Api-Token` | yes | password | DigitalOcean Personal Access Token. Create one in the DigitalOcean Control Panel → **API** → **Tokens** → **Generate New Token**. Needs read/write scope for the write tools below; a read-only token still works for the read-only tools and gets DigitalOcean's own 403 on write attempts. |
+| `X-DigitalOcean-Api-Token` | yes | password | DigitalOcean credential, shared by every resource group in this connector. Either a general Personal Access Token (Control Panel → **API** → **Tokens** → **Generate New Token**; needs read/write scope for the write tools below, a read-only token still works for the read-only tools and gets DigitalOcean's own 403 on write attempts) or, for Inference specifically, a narrower-scoped Model Access Key (Control Panel → **Inference** → **Model Access Keys**, see DigitalOcean's "Manage Model Access Keys" docs) — DigitalOcean accepts both for the Inference API. |
 
 Missing this header returns HTTP 401 with the header name in the response body — no request ever reaches DigitalOcean's API without it.
 
-## Tools (18)
+## Tools (22)
 
-All tools are prefixed `digitalocean_apps_` (this repository's other DigitalOcean resource groups, delivered on separate tickets, will use their own `digitalocean_<group>_` prefixes).
+Every tool is prefixed `digitalocean_<group>_` so tools from different resource groups never collide by name.
+
+### Apps (18)
 
 | Tool | Description |
 |---|---|
@@ -115,6 +117,15 @@ All tools are prefixed `digitalocean_apps_` (this repository's other DigitalOcea
 | `digitalocean_apps_get_deployment_options` | List valid regions and instance sizes for building an app spec. |
 
 Destructive tools (`delete_app`, `restart_app`, `cancel_deployment`, and `manage_rollback`'s `commit`/`revert` actions) always require an explicit resource id — there is no name-based lookup or bulk variant.
+
+### Inference (4)
+
+| Tool | Description |
+|---|---|
+| `digitalocean_inference_list_models` | List models available for inference on the account. |
+| `digitalocean_inference_create_chat_completion` | Generate a chat completion from a catalog model. |
+| `digitalocean_inference_create_embedding` | Create one embedding vector per input string. |
+| `digitalocean_inference_generate_image` | Generate image(s) from a text prompt; not read-only, consumes quota. |
 
 ## Errors
 
