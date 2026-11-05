@@ -103,10 +103,11 @@
       "tests/kubernetes/test_tools.py::test_delete_cluster_plain",
       "tests/kubernetes/test_tools.py::test_delete_cluster_selective_requires_ids",
       "tests/kubernetes/test_tools.py::test_delete_cluster_selective_with_ids",
+      "tests/kubernetes/test_tools.py::test_delete_cluster_selective_body_omits_unsupplied_lists",
       "tests/kubernetes/test_tools.py::test_delete_cluster_dangerous_description_states_irreversible"
     ],
     "result": "pass",
-    "evidence": "pytest tests/kubernetes/test_tools.py::test_delete_cluster_requires_mode test_delete_cluster_plain test_delete_cluster_selective_requires_ids test_delete_cluster_selective_with_ids test_delete_cluster_dangerous_description_states_irreversible -> 5 passed"
+    "evidence": "Review round 1 must-fix: mode=selective now sends load_balancers/volumes/volume_snapshots as a JSON body (json_body=, arrays) instead of comma-joined query params, matching DigitalOcean's OpenAPI spec for destroy_with_associated_resources/selective. pytest tests/kubernetes/test_tools.py::test_delete_cluster_requires_mode test_delete_cluster_plain test_delete_cluster_selective_requires_ids test_delete_cluster_selective_with_ids test_delete_cluster_selective_body_omits_unsupplied_lists test_delete_cluster_dangerous_description_states_irreversible -> 6 passed (2026-11-05, uv run pytest, full suite 89 passed). Live smoke test (scratch/PRD-21344/smoke.py, in-process ASGI) confirms the selective-delete call now reaches the real DigitalOcean API (api.digitalocean.com) and receives a real HTTP 401 with a well-formed request, not a silently-empty-body call."
   },
   {
     "id": "TC10",

@@ -263,17 +263,17 @@ def register(mcp: FastMCP) -> None:
                         "mode='selective' requires at least one id in load_balancer_ids, "
                         "volume_ids, or volume_snapshot_ids.",
                     )
-                params: dict[str, Any] = {}
+                json_body: dict[str, Any] = {}
                 if load_balancer_ids:
-                    params["load_balancers"] = ",".join(load_balancer_ids)
+                    json_body["load_balancers"] = list(load_balancer_ids)
                 if volume_ids:
-                    params["volumes"] = ",".join(volume_ids)
+                    json_body["volumes"] = list(volume_ids)
                 if volume_snapshot_ids:
-                    params["volume_snapshots"] = ",".join(volume_snapshot_ids)
+                    json_body["volume_snapshots"] = list(volume_snapshot_ids)
                 await client.request(
                     "DELETE",
                     f"/v2/kubernetes/clusters/{cluster_id}/destroy_with_associated_resources/selective",
-                    params=params,
+                    json_body=json_body,
                 )
             else:  # dangerous
                 await client.request(

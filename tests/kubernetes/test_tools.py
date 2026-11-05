@@ -362,24 +362,59 @@ async def test_delete_cluster_selective_requires_ids(mcp, fake_token, set_handle
 
 @pytest.mark.asyncio
 async def test_delete_cluster_selective_with_ids(mcp, fake_token, set_handler):
-    """TC9 (AC9): mode="selective" with explicit ids calls the selective-destroy endpoint."""
+    """TC9 (AC9): mode="selective" with explicit ids calls the selective-destroy endpoint.
+
+    DigitalOcean's selective-destroy endpoint takes the id lists as a JSON
+    body (arrays), not query params -- see review round 1 must-fix.
+    """
 
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["path"] = request.url.path
         captured["params"] = dict(request.url.params)
+        captured["body"] = json.loads(request.content) if request.content else None
         return httpx.Response(204)
 
     set_handler(handler)
     result = await call_tool_json(
         mcp,
         "digitalocean_kubernetes_delete_cluster",
-        {"cluster_id": "c1", "mode": "selective", "volume_ids": ["v1"]},
+        {
+            "cluster_id": "c1",
+            "mode": "selective",
+            "load_balancer_ids": ["lb1"],
+            "volume_ids": ["v1", "v2"],
+            "volume_snapshot_ids": ["vs1"],
+        },
     )
     assert captured["path"] == "/v2/kubernetes/clusters/c1/destroy_with_associated_resources/selective"
-    assert captured["params"] == {"volumes": "v1"}
+    assert captured["params"] == {}
+    assert captured["body"] == {
+        "load_balancers": ["lb1"],
+        "volumes": ["v1", "v2"],
+        "volume_snapshots": ["vs1"],
+    }
     assert result["mode"] == "selective"
+
+
+@pytest.mark.asyncio
+async def test_delete_cluster_selective_body_omits_unsupplied_lists(mcp, fake_token, set_handler):
+    """TC9 (AC9): only the supplied id list is present as a JSON body key."""
+
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content) if request.content else None
+        return httpx.Response(204)
+
+    set_handler(handler)
+    await call_tool_json(
+        mcp,
+        "digitalocean_kubernetes_delete_cluster",
+        {"cluster_id": "c1", "mode": "selective", "volume_ids": ["v1"]},
+    )
+    assert captured["body"] == {"volumes": ["v1"]}
 
 
 @pytest.mark.asyncio
