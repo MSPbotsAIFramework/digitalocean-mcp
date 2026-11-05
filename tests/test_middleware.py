@@ -1,13 +1,19 @@
-"""Tests for the credential middleware: TC3 (AC2) and TC17 (AC13)."""
+"""Tests for the credential middleware: TC3 (AC2) and TC17 (AC13).
+
+Also covers the request-id / logging behaviour added in review round 1
+(must-fix: structured logging, SOP section 6).
+"""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 import httpx
 import pytest
 
+from digitalocean_mcp import telemetry
 from digitalocean_mcp.client import DigitalOceanClient
 from digitalocean_mcp.middleware import CREDENTIAL_HEADER, CredentialMiddleware, get_api_token
 from digitalocean_mcp.settings import Settings
@@ -60,6 +66,58 @@ async def test_missing_credential_header_returns_401_before_upstream_call():
     assert payload["error"]["code"] == "not_configured"
     assert CREDENTIAL_HEADER in payload["error"]["message"]
     assert calls == [], "downstream (and so the upstream DigitalOcean client) must never run"
+
+
+@pytest.mark.asyncio
+async def test_missing_credential_header_logs_a_warning_with_no_token_value(caplog):
+    """Review round 1 must-fix: the 401 path is itself observable, and never
+    logs the credential header value (there is none to log in this path,
+    but the log line must not echo back arbitrary request headers either).
+    """
+    caplog.set_level(logging.WARNING, logger="digitalocean_mcp")
+
+    async def downstream(scope, receive, send):
+        await _respond_200(send)
+
+    middleware = CredentialMiddleware(downstream, mcp_path="/mcp")
+    await call_asgi(middleware, path="/mcp", headers={CREDENTIAL_HEADER: ""})
+
+    assert len(caplog.records) == 1
+    payload = json.loads(caplog.records[0].message)
+    assert payload["event"] == "missing_credential_header"
+    assert payload["path"] == "/mcp"
+    assert "token" not in json.dumps(payload).lower()
+
+
+@pytest.mark.asyncio
+async def test_request_id_is_bound_during_the_request_and_cleared_after():
+    seen: dict[str, str | None] = {}
+
+    async def downstream(scope, receive, send):
+        seen["request_id"] = telemetry.get_request_id()
+        await _respond_200(send)
+
+    middleware = CredentialMiddleware(downstream, mcp_path="/mcp")
+    await call_asgi(middleware, path="/mcp", headers={CREDENTIAL_HEADER: "do_fake_token_123"})
+
+    assert seen["request_id"], "a request-id must be bound while the request is in flight"
+    assert telemetry.get_request_id() is None
+
+
+@pytest.mark.asyncio
+async def test_each_request_gets_its_own_request_id():
+    seen: list[str | None] = []
+
+    async def downstream(scope, receive, send):
+        seen.append(telemetry.get_request_id())
+        await _respond_200(send)
+
+    middleware = CredentialMiddleware(downstream, mcp_path="/mcp")
+    await call_asgi(middleware, path="/mcp", headers={CREDENTIAL_HEADER: "t"})
+    await call_asgi(middleware, path="/mcp", headers={CREDENTIAL_HEADER: "t"})
+
+    assert len(seen) == 2
+    assert seen[0] != seen[1]
 
 
 @pytest.mark.asyncio

@@ -5,14 +5,25 @@ HTTP header, are scoped per-request through a ContextVar, and are reset in a
 `finally` block so one tenant's request can never observe another tenant's
 token. There is no environment-variable fallback — a missing header is a 401,
 never a silent reuse of some other value.
+
+Per SOP section 6, every `/mcp` request is also tagged with a fresh
+request-id (another ContextVar, same reset-in-`finally` discipline) so the
+structured log lines emitted by `client.py` and `tools/_shared.py` for that
+request can be correlated. The request-id and the token share the same scope
+and lifetime, but are tracked separately: logging must work even when the
+token is missing (the 401 case is itself logged).
 """
 
 from __future__ import annotations
 
+import logging
+import uuid
 from contextvars import ContextVar
 
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
+
+from digitalocean_mcp.telemetry import log_event, reset_request_id, set_request_id
 
 CREDENTIAL_HEADER = "X-DigitalOcean-Api-Token"
 
@@ -54,16 +65,25 @@ class CredentialMiddleware:
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
         token = headers.get(CREDENTIAL_HEADER.lower())
 
-        if not token:
-            response = _missing_header_response()
-            await response(scope, receive, send)
-            return
-
-        reset_token = _api_token.set(token)
+        request_id_token = set_request_id(uuid.uuid4().hex)
         try:
-            await self.app(scope, receive, send)
+            if not token:
+                log_event(
+                    "missing_credential_header",
+                    level=logging.WARNING,
+                    path=scope["path"],
+                )
+                response = _missing_header_response()
+                await response(scope, receive, send)
+                return
+
+            reset_token = _api_token.set(token)
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                _api_token.reset(reset_token)
         finally:
-            _api_token.reset(reset_token)
+            reset_request_id(request_id_token)
 
 
 async def require_token() -> str:

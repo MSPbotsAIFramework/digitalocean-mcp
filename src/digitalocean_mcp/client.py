@@ -4,17 +4,27 @@ One instance is built per tool call from the request's own token (see
 `middleware.get_api_token`); nothing here is shared across tenants except the
 underlying `httpx.AsyncClient` connection pool, which carries no credentials
 of its own — the `Authorization` header is attached per request.
+
+Per SOP section 6, every attempt against the upstream API (including retried
+ones) emits one `digitalocean_api_call` structured log line via
+`telemetry.log_event` — method, path, status code (or a transport-level
+`error_code` when the call never got a response), latency, and attempt
+number. The `Authorization` header and the raw response body are never
+logged (a response body can carry tenant secrets, e.g. an app spec's
+`SECRET`-type environment variables).
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import httpx
 
 from digitalocean_mcp.errors import ToolError
 from digitalocean_mcp.settings import Settings
+from digitalocean_mcp.telemetry import elapsed_ms, log_event
 
 BASE_URL = "https://api.digitalocean.com"
 
@@ -73,9 +83,11 @@ class DigitalOceanClient:
         attempt = 0
         while True:
             attempt += 1
+            call_started = time.perf_counter()
             try:
                 response = await self._client.request(method, path, params=params, json=json_body)
             except httpx.TimeoutException as exc:
+                self._log_call(method, path, attempt, call_started, error_code="timeout")
                 if attempt > self._settings.max_retries:
                     raise ToolError(
                         "upstream_error", f"DigitalOcean API request timed out: {exc}"
@@ -83,6 +95,7 @@ class DigitalOceanClient:
                 await asyncio.sleep(self._backoff_seconds(attempt))
                 continue
             except httpx.HTTPError as exc:
+                self._log_call(method, path, attempt, call_started, error_code="network_error")
                 if attempt > self._settings.max_retries:
                     raise ToolError(
                         "upstream_error", f"DigitalOcean API request failed: {exc}"
@@ -91,10 +104,35 @@ class DigitalOceanClient:
                 continue
 
             if response.status_code in _RETRYABLE_STATUS and attempt <= self._settings.max_retries:
+                self._log_call(method, path, attempt, call_started, status_code=response.status_code, retrying=True)
                 await asyncio.sleep(self._wait_seconds(response, attempt))
                 continue
 
+            self._log_call(method, path, attempt, call_started, status_code=response.status_code)
             return self._to_result(response)
+
+    @staticmethod
+    def _log_call(
+        method: str,
+        path: str,
+        attempt: int,
+        started: float,
+        *,
+        status_code: int | None = None,
+        error_code: str | None = None,
+        retrying: bool = False,
+    ) -> None:
+        """Log one outbound DigitalOcean API attempt. Never the Authorization header or body."""
+        log_event(
+            "digitalocean_api_call",
+            method=method,
+            path=path,
+            status_code=status_code,
+            error_code=error_code,
+            attempt=attempt,
+            retrying=retrying,
+            latency_ms=elapsed_ms(started),
+        )
 
     def _backoff_seconds(self, attempt: int) -> float:
         return min(2.0 ** (attempt - 1), self._settings.max_retry_wait_seconds)
