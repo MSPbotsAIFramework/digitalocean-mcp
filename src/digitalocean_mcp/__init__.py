@@ -1,1 +1,1 @@
-"""DigitalOcean MCP server (Apps, Inference, and other resource groups)."""
+"""DigitalOcean MCP server (Apps, Inference, Kubernetes, Networking, and other resource groups)."""

@@ -1,0 +1,190 @@
+[
+  {
+    "id": "TC1",
+    "ac": "AC1",
+    "text": "Given the connector is running, When a client sends tools/list with a valid credential header, Then the response includes exactly the 17 digitalocean_networking_* tools named in the tech design's Data & API contract table, each with a first-line description <= 100 chars and full description <= 500 chars, and each annotated with the correct readOnlyHint/destructiveHint/idempotentHint",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_tools_list_has_all_networking_tools_with_valid_descriptions"
+    ]
+  },
+  {
+    "id": "TC2",
+    "ac": "AC2",
+    "text": "Given a tools/call request with no X-DigitalOcean-Api-Token header, When any Networking tool is invoked, Then the response is HTTP 401 listing the required header, and the upstream api.digitalocean.com client is never called",
+    "type": "auto",
+    "tests": [
+      "tests/test_middleware.py::test_missing_credential_header_returns_401_before_upstream_call"
+    ]
+  },
+  {
+    "id": "TC3",
+    "ac": "AC3",
+    "text": "Given a valid token and a mocked GET /v2/vpcs response with 3 VPCs, When digitalocean_networking_list_vpcs is called with no vpc_id, Then it returns the 3 VPCs with a has_more flag and the tool is annotated readOnlyHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_list_vpcs_no_id_returns_paginated_list"
+    ]
+  },
+  {
+    "id": "TC4",
+    "ac": "AC3",
+    "text": "Given a valid token, an existing vpc_id, and mocked responses for GET /v2/vpcs/{id}, GET /v2/vpcs/{id}/members, and GET /v2/vpcs/{id}/peerings, When digitalocean_networking_list_vpcs is called with that vpc_id, Then the response merges the VPC's detail, member_count, and peerings into one result",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_list_vpcs_with_id_merges_detail_members_and_peerings"
+    ]
+  },
+  {
+    "id": "TC5",
+    "ac": "AC4",
+    "text": "Given a valid token and a payload missing the required name field, When digitalocean_networking_create_vpc is called, Then DigitalOcean's own validation error (mocked 400) is surfaced as a structured invalid_argument error carrying DigitalOcean's message, not a generic failure or a 500",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_create_vpc_missing_name_returns_invalid_argument"
+    ]
+  },
+  {
+    "id": "TC6",
+    "ac": "AC5",
+    "text": "Given a valid token, an existing vpc_id, and a payload containing only description, When digitalocean_networking_update_vpc is called, Then the outbound PATCH body contains only the description field (not name or default), confirming partial-update semantics",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_update_vpc_sends_partial_patch_body"
+    ]
+  },
+  {
+    "id": "TC7",
+    "ac": "AC6",
+    "text": "Given a valid token, an existing vpc_id, and a mocked DELETE /v2/vpcs/{id} response indicating the VPC still has member resources, When digitalocean_networking_delete_vpc is called, Then the response is a structured error (not an HTTP 500, not silently retried) and the tool is annotated destructiveHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_delete_vpc_with_members_returns_structured_error"
+    ]
+  },
+  {
+    "id": "TC8",
+    "ac": "AC7",
+    "text": "Given a valid token, When digitalocean_networking_manage_vpc_peering is called with action=create and 1 or 3 vpc_ids, Then it returns invalid_argument without calling DigitalOcean; When called with exactly 2 valid vpc_ids against a mocked POST /v2/vpc_peerings, Then the peering is created",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_manage_vpc_peering_create_requires_exactly_two_vpc_ids"
+    ]
+  },
+  {
+    "id": "TC9",
+    "ac": "AC7",
+    "text": "Given a valid token, When digitalocean_networking_manage_vpc_peering is called with action=delete and no vpc_peering_id, Then it returns invalid_argument without calling DigitalOcean; with a valid vpc_peering_id against a mocked DELETE /v2/vpc_peerings/{id}, Then the peering is deleted and the tool is annotated destructiveHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_manage_vpc_peering_delete_requires_explicit_id"
+    ]
+  },
+  {
+    "id": "TC10",
+    "ac": "AC8",
+    "text": "Given a valid token and a mocked GET /v2/firewalls/{id} for an existing firewall_id, When digitalocean_networking_list_firewalls is called with that id, Then it returns full rule/droplet/tag detail; Given a nonexistent firewall_id (mocked 404), Then the response is a structured not_found error, not an HTTP 500",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_list_firewalls_get_by_id_happy_path_and_not_found"
+    ]
+  },
+  {
+    "id": "TC11",
+    "ac": "AC9",
+    "text": "Given a valid token, an existing firewall_id, and a complete inbound_rules/outbound_rules/droplet_ids/tags payload, When digitalocean_networking_update_firewall is called, Then the outbound PUT request body is exactly that payload (whole-object replace, no merge with any prior state), matching the tool description's stated semantics",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_update_firewall_sends_whole_object_replace_body"
+    ]
+  },
+  {
+    "id": "TC12",
+    "ac": "AC10",
+    "text": "Given a valid token, When digitalocean_networking_delete_firewall is called without a firewall_id, Then it is rejected by argument validation before any call to DigitalOcean; with a valid firewall_id against a mocked DELETE, Then it succeeds and the tool is annotated destructiveHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_delete_firewall_requires_explicit_id"
+    ]
+  },
+  {
+    "id": "TC13",
+    "ac": "AC11",
+    "text": "Given a valid token and a mocked GET /v2/domains/{name} for an existing domain, When digitalocean_networking_list_domains is called with that domain_name, Then it returns the domain's detail; Given a mocked 409/422 conflict response for a duplicate domain name, When digitalocean_networking_create_domain is called, Then DigitalOcean's own conflict error is surfaced as a structured error, not a generic failure",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_list_domains_get_by_name_and_create_domain_duplicate_conflict"
+    ]
+  },
+  {
+    "id": "TC14",
+    "ac": "AC12",
+    "text": "Given a valid token and an existing domain_name, When digitalocean_networking_manage_domain_record is called with action=create, update, and delete in sequence against mocked POST/PATCH/DELETE endpoints, Then each action maps to the corresponding DigitalOcean endpoint; When action=delete is called without a domain_record_id, Then it is rejected by argument validation and the tool is annotated destructiveHint: true for the delete action",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_manage_domain_record_create_update_delete_lifecycle",
+      "tests/networking/test_tools.py::test_manage_domain_record_delete_requires_explicit_record_id"
+    ]
+  },
+  {
+    "id": "TC15",
+    "ac": "AC13",
+    "text": "Given a valid token and a mocked GET /v2/load_balancers/{id} for an existing lb_id, When digitalocean_networking_list_load_balancers is called with that id, Then it returns droplet_ids and forwarding_rules; Given a complete desired-state payload, When digitalocean_networking_update_load_balancer is called, Then the outbound PUT request body is exactly that payload (whole-object replace, same semantics as update_firewall)",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_list_load_balancers_get_by_id_and_update_sends_whole_object_replace"
+    ]
+  },
+  {
+    "id": "TC16",
+    "ac": "AC14",
+    "text": "Given a valid token, When digitalocean_networking_delete_load_balancer is called without an lb_id, Then it is rejected by argument validation before any call to DigitalOcean; with a valid lb_id against a mocked DELETE, Then it succeeds and the tool is annotated destructiveHint: true",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_tools.py::test_delete_load_balancer_requires_explicit_id"
+    ]
+  },
+  {
+    "id": "TC17",
+    "ac": "AC15",
+    "text": "Given two concurrent tools/call requests carrying two different tenants' X-DigitalOcean-Api-Token values (A and B), When both complete, Then neither response contains data retrieved using the other request's token -- verified by asserting no shared mutable state keyed only by in-process globals",
+    "type": "auto",
+    "tests": [
+      "tests/test_middleware.py::test_concurrent_requests_do_not_leak_credentials_across_tenants"
+    ]
+  },
+  {
+    "id": "TC18",
+    "ac": "AC16",
+    "text": "Given a mocked upstream 429 response with a Retry-After header, When any Networking tool is called, Then the client retries with backoff honoring Retry-After within the bounded retry budget; if still 429 after retries, Then the agent sees a structured rate_limited error, not a bare timeout",
+    "type": "auto",
+    "tests": [
+      "tests/networking/test_client.py::test_429_retries_with_backoff_then_rate_limited"
+    ]
+  },
+  {
+    "id": "TC19",
+    "ac": "AC17",
+    "text": "Given the repository's README.md, Then it documents the X-DigitalOcean-Api-Token header (purpose, how to obtain it, required scope), lists all 17 Networking tools in its tool table, and its MSPbots Connector section is byte-for-byte identical to the skill's reference/readme-connector-section.md",
+    "type": "auto",
+    "tests": [
+      "tests/test_readme.py::test_readme_documents_networking_header_and_tools",
+      "tests/test_readme.py::test_readme_connector_section_matches_reference_byte_for_byte"
+    ]
+  },
+  {
+    "id": "TC20",
+    "ac": "AC6",
+    "text": "Given a real DigitalOcean account token and a VPC that still has member resources attached, When digitalocean_networking_delete_vpc is called against the live API, Then the real error shape (status code, id/message fields) confirms or corrects the assumed precondition-failure mapping in the tech design's Data & API contract section",
+    "type": "manual",
+    "steps": [
+      "Obtain a real DigitalOcean Personal Access Token",
+      "Start the connector locally with the real token in X-DigitalOcean-Api-Token",
+      "Create a VPC, attach a Droplet or Load Balancer to it as a member",
+      "Call tools/call digitalocean_networking_delete_vpc with that vpc_id"
+    ],
+    "expect": "The real HTTP status and error body match (or are used to correct) the tech design's assumed invalid_argument mapping; the connector surfaces it as a structured error, not a 500",
+    "result": "untested",
+    "notes": "needs a real vendor account; recorded as pending in the Self-test report, not blocking per mcp-track.md section 3 (\"no test account is not a blocker\")"
+  }
+]

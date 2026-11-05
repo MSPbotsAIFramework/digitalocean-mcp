@@ -1,11 +1,11 @@
 # digitalocean-mcp
 
-MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers three resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them; and Kubernetes (DOKS) — managing clusters and their node pools, including upgrades, kubeconfig/credentials, and node-level operations.
+MCP server exposing DigitalOcean to MSPbots Agent Platform clients (Claude, ChatGPT, Cursor, or any MCP-compatible AI). Covers four resource groups so far: App Platform ("Apps") — listing and managing apps, triggering and inspecting deployments, reading logs/instances/events/alerts, and rolling back a bad deployment; Serverless Inference — listing the account's available inference models and running chat completions, embeddings, and image generation against them; Kubernetes (DOKS) — managing clusters and their node pools, including upgrades, kubeconfig/credentials, and node-level operations; and Networking — VPCs (incl. peering), Cloud Firewalls, Domains/DNS, and Load Balancers.
 
 - **Transport**: MCP Streamable HTTP (`POST /mcp`) + `GET /health`.
 - **Tech stack**: Python 3.12, [FastMCP](https://github.com/modelcontextprotocol/python-sdk), `httpx`, `pydantic-settings`.
 - **License**: Apache-2.0 (see [LICENSE](LICENSE)). Copyright MSPbots.ai.
-- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. Apps, Inference, and Kubernetes are documented below; Networking lands on its own ticket.
+- **Scope**: this repository is shared by four tickets, one per DigitalOcean resource group — Apps, Inference Model Catalog, Kubernetes (DOKS), and Networking. All four are documented below.
 
 <!-- BEGIN MSPBOTS CONNECTOR SECTION (verbatim copy of vendor-mcp-development's reference/readme-connector-section.md — do not edit by hand, see tests/test_readme.py) -->
 <div align="center">
@@ -89,7 +89,7 @@ Links: [connect.mspbots.ai](https://connect.mspbots.ai) · [mspbots.ai](https://
 
 Missing this header returns HTTP 401 with the header name in the response body — no request ever reaches DigitalOcean's API without it.
 
-## Tools (38)
+## Tools (55)
 
 Every tool is prefixed `digitalocean_<group>_` so tools from different resource groups never collide by name.
 
@@ -149,6 +149,30 @@ Destructive tools (`delete_app`, `restart_app`, `cancel_deployment`, and `manage
 | `digitalocean_kubernetes_get_deployment_options` | List valid regions, Kubernetes versions, and node sizes for DOKS. |
 
 Destructive tools (`delete_cluster`, `upgrade_cluster`, `delete_node_pool`, `delete_node`) always require an explicit resource id (and, for `delete_cluster`, an explicit `mode` -- there is no default). `get_kubeconfig` and `get_credentials` return maximally privileged cluster-admin artifacts and are never logged.
+
+### Networking (17)
+
+| Tool | Description |
+|---|---|
+| `digitalocean_networking_list_vpcs` | List VPCs in the account, or get one VPC's detail, member count, and peerings. |
+| `digitalocean_networking_create_vpc` | Create a new VPC. |
+| `digitalocean_networking_update_vpc` | Partially update a VPC. Only the fields supplied here change. |
+| `digitalocean_networking_delete_vpc` | Delete a VPC. Irreversible, and fails if the VPC still has member resources attached. |
+| `digitalocean_networking_manage_vpc_peering` | List, inspect, create, rename, or delete a VPC peering. |
+| `digitalocean_networking_list_firewalls` | List firewalls in the account, or get one firewall's full detail. |
+| `digitalocean_networking_create_firewall` | Create a new firewall. |
+| `digitalocean_networking_update_firewall` | Replace a firewall's rules and membership. Whole-object replace, not a partial merge. |
+| `digitalocean_networking_delete_firewall` | Delete a firewall. This is irreversible. |
+| `digitalocean_networking_list_domains` | List domains in the account, or get one domain's detail (zone file, TTL). |
+| `digitalocean_networking_create_domain` | Register a new domain on the account. |
+| `digitalocean_networking_delete_domain` | Delete a domain and all of its records. Irreversible. |
+| `digitalocean_networking_manage_domain_record` | List, inspect, create, update, or delete one DNS record on a domain. |
+| `digitalocean_networking_list_load_balancers` | List load balancers in the account, or get one's full detail. |
+| `digitalocean_networking_create_load_balancer` | Create a new load balancer. |
+| `digitalocean_networking_update_load_balancer` | Replace a load balancer's droplets and forwarding rules. Whole-object replace, not a partial merge. |
+| `digitalocean_networking_delete_load_balancer` | Delete a load balancer. Irreversible, and does not delete the Droplets behind it. |
+
+Destructive tools (`delete_vpc`, `delete_firewall`, `delete_domain`, `delete_load_balancer`, and `manage_vpc_peering`/`manage_domain_record`'s `delete` action) always require an explicit resource id -- there is no name-based lookup or bulk variant. `update_firewall` and `update_load_balancer` are whole-object `PUT` replaces (unspecified arrays are not preserved); `update_vpc` and `manage_domain_record`'s `update` action are `PATCH` partial updates (only the given fields change) -- read the current full state first (`list_vpcs`/`list_firewalls`/`list_load_balancers` with the resource id) before calling either update-by-replace tool.
 
 ## Errors
 

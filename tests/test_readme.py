@@ -59,3 +59,31 @@ def test_readme_documents_credential_header_and_creation_path():
     assert "## Authentication headers" in text
     assert "X-DigitalOcean-Api-Token" in text
     assert "Control Panel" in text and "Tokens" in text, "must document where to create the token"
+
+
+def test_readme_documents_networking_header_and_tools():
+    """TC19 (AC17): README documents the shared X-DigitalOcean-Api-Token
+    header and lists all 17 Networking tools in its tool table."""
+    text = README.read_text()
+    assert "## Authentication headers" in text
+    assert "X-DigitalOcean-Api-Token" in text
+    for tool in (
+        "digitalocean_networking_list_vpcs",
+        "digitalocean_networking_create_vpc",
+        "digitalocean_networking_update_vpc",
+        "digitalocean_networking_delete_vpc",
+        "digitalocean_networking_manage_vpc_peering",
+        "digitalocean_networking_list_firewalls",
+        "digitalocean_networking_create_firewall",
+        "digitalocean_networking_update_firewall",
+        "digitalocean_networking_delete_firewall",
+        "digitalocean_networking_list_domains",
+        "digitalocean_networking_create_domain",
+        "digitalocean_networking_delete_domain",
+        "digitalocean_networking_manage_domain_record",
+        "digitalocean_networking_list_load_balancers",
+        "digitalocean_networking_create_load_balancer",
+        "digitalocean_networking_update_load_balancer",
+        "digitalocean_networking_delete_load_balancer",
+    ):
+        assert tool in text, f"README tool table missing {tool}"
