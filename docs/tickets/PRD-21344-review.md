@@ -1,5 +1,7 @@
 # PRD-21344 · Code review
 
+Status: frozen @ 008a71d
+
 ## Round 1 · 2026-11-05 · reviewed dev/PRD-21344 @ b74b7f0 (base main @ 6c983dd)
 
 Verdict: changes requested
@@ -18,3 +20,26 @@ Everything else reviewed clean: credential handling only from `X-DigitalOcean-Ap
    - `uv run pytest` -> 89 passed (88 + 1 new), 0 regressions, on `dev/PRD-21344 @ f41bb9a` (branch already in sync with `main @ 6c983dd`, no merge needed this round).
    - Live re-check: `scratch/PRD-21344/smoke.py` (in-process ASGI transport, same pattern as `scratch/PRD-21343/smoke.py`) calls `digitalocean_kubernetes_delete_cluster(mode="selective", volume_ids=[...])` against a fake token; the outbound `DELETE https://api.digitalocean.com/v2/kubernetes/clusters/.../destroy_with_associated_resources/selective` now reaches DigitalOcean's real API and gets back a real HTTP 401 (mapped to `unauthorized`) with a well-formed JSON-body request — the request is no longer silently empty. `/health` 200, missing-header 401, `tools/list` 38 total / 16 `digitalocean_kubernetes_*` all still pass.
    - Chinese scan re-run: only pre-existing hit remains in `docs/tickets/PRD-21338-review.md` (unrelated ticket's review text, quoting the SOP's Chinese section titles as evidence — not this ticket's code, not new this round). README connector section untouched. `gitleaks` still unavailable on this machine (command not found), skipped per "有就跑", same as round 1.
+
+## Round 2 · 2026-11-05 · reviewed dev/PRD-21344 @ 008a71d (base main @ 6c983dd)
+
+Verdict: approved
+
+### Findings
+
+None. Scope is the delta since round 1 (`b74b7f0..008a71d`): `src/digitalocean_mcp/tools/kubernetes.py` (round 1 must-fix #1 fix), `tests/kubernetes/test_tools.py` (updated + new test), `docs/tickets/PRD-21344.ac.json` (TC9 evidence), `docs/tickets/PRD-21344-review.md` (round 1 record).
+
+### Round 1 must-fix verification
+
+1. **Must-fix #1** (`src/digitalocean_mcp/tools/kubernetes.py`, `delete_cluster(mode="selective")`) — verified fixed at `f41bb9a`. `src/digitalocean_mcp/tools/kubernetes.py:266-277` now builds `json_body = {"load_balancers": [...], "volumes": [...], "volume_snapshots": [...]}` (arrays, only for supplied lists) and calls `client.request("DELETE", ..., json_body=json_body)`; no more `params=` for this call, so it matches DigitalOcean's `destroy_with_associated_resources/selective` JSON-body contract cited in round 1. Confirmed `KubernetesClient.request()` forwards `json_body=` to `httpx`'s `json=` (`kubernetes_client.py:93,113-123`), so the array is sent as the actual request JSON body, not re-serialized as a query string.
+2. `tests/kubernetes/test_tools.py::test_delete_cluster_selective_with_ids` now asserts on the captured JSON body (`captured["body"] == {"load_balancers": ["lb1"], "volumes": ["v1", "v2"], "volume_snapshots": ["vs1"]}`) and that `captured["params"] == {}` — this is the real regression guard round 1 was missing (previously it asserted on query params, which is why the bug shipped with a passing test). New `test_delete_cluster_selective_body_omits_unsupplied_lists` confirms partial-list calls only include the supplied key. Both exercise the same `call_tool_json` path as the real tool invocation (not a unit test of a helper in isolation).
+3. `docs/tickets/PRD-21344.ac.json` TC9 evidence rewritten to describe the fix, list the updated/added tests, and note the live smoke-test re-check (selective-delete now reaches the real DigitalOcean API with a well-formed JSON body and gets a real 401, not a silently-empty body) — consistent with the `[DEV]` stub's self-test claim.
+4. Verified independently, not just re-read from the Fixes note: `cd dev/PRD-21344 worktree && uv run pytest -q` → `89 passed` (2026-11-05, this review), matching the round-1 Fixes claim; no regressions, no skips, no unparsed output.
+5. No scope creep: the round-1→round-2 diff touches only the files listed above; no unrelated behavior changed, no new dependency, no schema/migration, no README change (connector section still byte-exact per round 1).
+6. Chinese-content check on the touched files: only hit is `docs/tickets/PRD-21344-review.md`'s own round-1 "Fixes" note quoting the convention phrase `"有就跑"` inside an English sentence (not code, not a user-facing doc, not new content delivered by this ticket) — not a must-fix.
+
+Everything round 1 found clean (credential handling, error envelope, retry/backoff, destructive-tool id/mode requirements, pagination/response-size bound, module layout note, README, test coverage of the other 15 tools) is unchanged in this round's diff and still holds.
+
+### Fixes
+
+N/A — no further findings this round.
